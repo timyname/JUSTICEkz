@@ -1,0 +1,141 @@
+{
+  "jurisdiction": "KZ",
+  "language": "rus",
+  "catalog": "Adilet",
+  "catalogUrl": "https://adilet.zan.kz",
+  "sources": [
+    {
+      "slug": "civil-code-general",
+      "id": "K940001000_",
+      "kind": "official_code",
+      "title": "Гражданский кодекс Республики Казахстан (Общая часть)",
+      "effectiveFrom": "1994-12-27"
+    },
+    {
+      "slug": "civil-code-special",
+      "id": "K990000409_",
+      "kind": "official_code",
+      "title": "Гражданский кодекс Республики Казахстан (Особенная часть)",
+      "effectiveFrom": "1999-07-01"
+    },
+    {
+      "slug": "civil-procedure-code",
+      "id": "K1500000377",
+      "kind": "official_code",
+      "title": "Гражданский процессуальный кодекс Республики Казахстан",
+      "effectiveFrom": "2015-10-31"
+    },
+    {
+      "slug": "administrative-procedural-code",
+      "id": "K2000000350",
+      "kind": "official_code",
+      "title": "Административный процедурно-процессуальный кодекс Республики Казахстан",
+      "effectiveFrom": "2020-06-29"
+    },
+    {
+      "slug": "enforcement-and-bailiffs",
+      "id": "Z100000261_",
+      "kind": "official_law",
+      "title": "Об исполнительном производстве и статусе судебных исполнителей",
+      "effectiveFrom": "2010-04-02"
+    },
+    {
+      "slug": "entrepreneurial-code",
+      "id": "K1500000375",
+      "kind": "official_code",
+      "title": "Предпринимательский кодекс Республики Казахстан",
+      "effectiveFrom": "2015-10-29"
+    },
+    {
+      "slug": "supreme-court-civil-procedure",
+      "id": "P03000002S_",
+      "kind": "supreme_court_normative",
+      "title": "О применении судами некоторых норм гражданского процессуального законодательства",
+      "effectiveFrom": "2003-03-20"
+    },
+    {
+      "slug": "supreme-court-civil-judgment",
+      "id": "P03000005S_",
+      "kind": "supreme_court_normative",
+      "title": "О судебном решении по гражданским делам",
+      "effectiveFrom": "2003-07-11"
+    },
+    {
+      "slug": "supreme-court-civil-costs",
+      "id": "P06000009S_",
+      "kind": "supreme_court_normative",
+      "title": "О применении судами Республики Казахстан законодательства о судебных расходах по гражданским делам",
+      "effectiveFrom": "2006-12-25"
+    },
+    {
+      "slug": "supreme-court-civil-preparation",
+      "id": "P01000021S_",
+      "kind": "supreme_court_normative",
+      "title": "О подготовке гражданских дел к судебному разбирательству",
+      "effectiveFrom": "2001-12-13"
+    },
+    {
+      "slug": "supreme-court-enforcement",
+      "id": "P170000001S",
+      "kind": "supreme_court_normative",
+      "title": "О применении судами некоторых норм законодательства об исполнительном производстве",
+      "effectiveFrom": "2017-03-30"
+    },
+    {
+      "slug": "supreme-court-executive-inscription",
+      "id": "P220000006S",
+      "kind": "supreme_court_normative",
+      "title": "О применении судами законодательства при рассмотрении дел об оспаривании исполнительной надписи",
+      "effectiveFrom": "2022-05-26"
+    },
+    {
+      "slug": "supreme-court-interim-measures",
+      "id": "P09000002S_",
+      "kind": "supreme_court_normative",
+      "title": "О принятии обеспечительных мер по гражданским делам",
+      "effectiveFrom": "2009-01-12"
+    },
+    {
+      "slug": "supreme-court-access-to-justice",
+      "id": "P160000001S",
+      "kind": "supreme_court_normative",
+      "title": "О праве доступа к правосудию и правомочиях Верховного Суда Республики Казахстан по пересмотру судебных актов",
+      "effectiveFrom": "2016-01-15"
+    },
+    {
+      "slug": "supreme-court-administrative-judgment",
+      "id": "P240000005S",
+      "kind": "supreme_court_normative",
+      "title": "О судебном решении по административным делам",
+      "effectiveFrom": "2024-11-29"
+    },
+    {
+      "slug": "supreme-court-administrative-procedure",
+      "id": "P260000002S",
+      "kind": "supreme_court_normative",
+      "title": "Об отдельных вопросах применения процессуального законодательства по административным делам",
+      "effectiveFrom": "2026-04-09"
+    },
+    {
+      "slug": "supreme-court-new-circumstances",
+      "id": "P170000012S",
+      "kind": "supreme_court_normative",
+      "title": "О применении судами норм Гражданского процессуального кодекса Республики Казахстан при пересмотре судебных актов по вновь открывшимся или новым обстоятельствам",
+      "effectiveFrom": "2017-12-08"
+    },
+    {
+      "slug": "supreme-court-llp",
+      "id": "P08000002S_",
+      "kind": "supreme_court_normative",
+      "title": "О некоторых вопросах применения законодательства о товариществах с ограниченной и дополнительной ответственностью",
+      "effectiveFrom": "2008-07-10"
+    },
+    {
+      "slug": "supreme-court-jsc",
+      "id": "P09000008S_",
+      "kind": "supreme_court_normative",
+      "title": "О применении законодательства об акционерных обществах",
+      "effectiveFrom": "2009-12-28"
+    }
+  ]
+}

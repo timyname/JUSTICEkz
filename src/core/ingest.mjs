@@ -11,13 +11,21 @@ const execFileAsync = promisify(execFile);
 const textExtensions = new Set(['.txt', '.md', '.csv', '.json', '.log']);
 const imageExtensions = new Set(['.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp', '.webp']);
 
-function resolveTool(name) {
-  const executable = process.platform === 'win32' ? `${name}.exe` : name;
+export function toolExecutable(name, platform = process.platform) {
+  if (platform === 'win32' && name === 'soffice') return 'soffice.com';
+  return platform === 'win32' ? `${name}.exe` : name;
+}
+
+export function resolveTool(name) {
+  const executable = toolExecutable(name);
   const candidates = [
     process.env[`${name.toUpperCase()}_PATH`],
     path.join(process.cwd(), '.justicekz', 'tools', 'Tesseract-OCR', executable),
     process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'Tesseract-OCR', executable),
     process.env.ProgramFiles && path.join(process.env.ProgramFiles, 'Tesseract-OCR', executable),
+    name === 'soffice' && process.env.ProgramFiles && path.join(process.env.ProgramFiles, 'LibreOffice', 'program', executable),
+    name === 'soffice' && process.env.ProgramFiles && path.join(process.env.ProgramFiles, 'LibreOffice', executable),
+    name === 'soffice' && process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'Programs', 'LibreOffice', 'program', executable),
   ].filter(Boolean);
   return candidates.find((candidate) => fs.existsSync(candidate)) ?? name;
 }
@@ -117,7 +125,7 @@ export function extractSuggestedEvents(text, { fileName = 'документ' } =
 }
 
 async function extractDocWithConverter(storedPath, extension) {
-  const converter = extension === '.doc' ? 'soffice' : null;
+  const converter = extension === '.doc' ? resolveTool('soffice') : null;
   if (!converter) return { status: 'converter_pending', text: '', error: 'Для этого формата нужен локальный конвертер' };
   const outputDir = fs.mkdtempSync(path.join(path.dirname(storedPath), 'convert-'));
   try {
@@ -160,7 +168,7 @@ async function extractText({ storedPath, extension, buffer }) {
   if (extension === '.doc') return extractDocWithConverter(storedPath, extension);
   if (extension === '.pdf') {
     try {
-      const result = await execFileAsync('pdftotext', [storedPath, '-'], { encoding: 'utf8', windowsHide: true });
+      const result = await execFileAsync(resolveTool('pdftotext'), [storedPath, '-'], { encoding: 'utf8', windowsHide: true });
       if (result.stdout.trim()) return { status: 'text_extracted', text: result.stdout };
     } catch {
       // A scanned PDF may need the optional page renderer and OCR path.

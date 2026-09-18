@@ -21,3 +21,19 @@ test('legal importer stores a law outside all case memories', () => {
   assert.equal(db.listLegalMemories({ asOf: '2026-01-01' }).length, 1);
   db.close();
 });
+
+test('legal importer does not duplicate the same official snapshot', () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'justicekz-law-dedupe-'));
+  const db = createDatabase({ dataDir });
+  const record = {
+    title: 'Повторяемый НПА',
+    content: 'Официальный текст редакции',
+    sourceUrl: 'https://adilet.zan.kz/rus/docs/P000000001S',
+    effectiveFrom: '2025-01-01',
+  };
+  const first = ingestLawRecord({ db, record });
+  const second = ingestLawRecord({ db, record });
+  assert.equal(second.id, first.id);
+  assert.equal(db.listMemories({ scope: 'law' }).length, 1);
+  db.close();
+});

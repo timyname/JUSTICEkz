@@ -6,7 +6,7 @@ import path from 'node:path';
 
 import { createDatabase } from '../src/core/db.mjs';
 import { chunkText } from '../src/core/chunking.mjs';
-import { extractDocxText, extractSuggestedEvents, ingestDocument } from '../src/core/ingest.mjs';
+import { extractDocxText, extractSuggestedEvents, ingestDocument, resolveTool, toolExecutable } from '../src/core/ingest.mjs';
 import { createDocumentQueue } from '../src/core/processing.mjs';
 
 function tempDataDir() {
@@ -63,6 +63,19 @@ test('chronology extraction suggests dated events with source pages', () => {
   assert.deepEqual(events.map((event) => event.eventDate), ['2026-08-14', '2026-08-20']);
   assert.deepEqual(events.map((event) => event.sourcePage), [1, 2]);
   assert.ok(events.every((event) => event.status === 'suggested'));
+});
+
+test('tool resolution honors an explicit local converter path', () => {
+  const previous = process.env.SOFFICE_PATH;
+  process.env.SOFFICE_PATH = process.execPath;
+  assert.equal(resolveTool('soffice'), process.execPath);
+  if (previous === undefined) delete process.env.SOFFICE_PATH;
+  else process.env.SOFFICE_PATH = previous;
+});
+
+test('Windows LibreOffice resolution uses the console launcher', () => {
+  assert.equal(toolExecutable('soffice', 'win32'), 'soffice.com');
+  assert.equal(toolExecutable('tesseract', 'win32'), 'tesseract.exe');
 });
 
 test('document queue processes a batch sequentially and keeps each case isolated', async () => {

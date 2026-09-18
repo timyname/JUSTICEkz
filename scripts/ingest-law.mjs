@@ -16,6 +16,12 @@ export function validateLegalRecord(record) {
 
 export function ingestLawRecord({ db, record }) {
   const valid = validateLegalRecord(record);
+  const existing = db.listMemories({ scope: 'law' }).find((memory) => (
+    memory.source_url === valid.sourceUrl
+    && memory.effective_from === valid.effectiveFrom
+    && memory.content === valid.content
+  ));
+  if (existing) return existing;
   return db.addMemory({
     scope: 'law', kind: valid.kind ?? 'legal_act', title: valid.number ? `${valid.number} · ${valid.title}` : valid.title,
     content: valid.content, sourceUrl: valid.sourceUrl, effectiveFrom: valid.effectiveFrom, effectiveTo: valid.effectiveTo ?? null,
