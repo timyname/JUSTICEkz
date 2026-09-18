@@ -6,5 +6,5 @@ test('config uses a local data directory and stable default port', async () => {
 
   assert.equal(config.port, 4317);
   assert.match(config.dataDir, /\.justicekz/);
-  assert.equal(config.modelUrl, null);
+  assert.equal(config.modelUrl, process.env.JUSTICE_MODEL_URL?.trim() || null);
 });

@@ -82,6 +82,22 @@ input[type="date"] { padding: 7px 8px; font-size: 12px; }
 .context-section { padding-bottom: 22px; margin-bottom: 22px; border-bottom: 1px solid var(--line); }
 .count-badge { min-width: 21px; height: 21px; display: grid; place-items: center; background: #e8eee9; color: var(--accent); font-size: 11px; }
 .source-list, .task-list { display: grid; gap: 9px; margin-top: 14px; }
+.document-list, .event-list, .question-list { display: grid; gap: 8px; margin-top: 14px; }
+.document-item { padding: 10px; background: #fff; border: 1px solid var(--line); }
+.document-heading { display: flex; gap: 8px; justify-content: space-between; align-items: flex-start; }
+.document-heading strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.document-status { flex: 0 0 auto; color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .04em; }
+.status-text_extracted, .status-ocr_extracted { color: var(--accent); }
+.status-ocr_pending, .status-converter_pending, .status-extraction_failed { color: var(--amber); }
+.document-meta, .event-item span { color: var(--muted); font-size: 10px; margin-top: 6px; }
+.document-progress { height: 4px; margin-top: 8px; background: #e7ece8; overflow: hidden; }
+.document-progress span { display: block; height: 100%; background: var(--accent); transition: width .25s ease; }
+.document-error { margin-top: 7px; color: var(--danger); font-size: 10px; line-height: 1.35; }
+.event-item { padding: 9px 10px; background: #fff; border: 1px solid var(--line); }
+.event-item strong { color: var(--accent); font-size: 11px; }
+.event-item p { margin-top: 4px; font-size: 11px; line-height: 1.4; }
+.question-item { display: flex; gap: 8px; font-size: 11px; line-height: 1.4; }
+.question-mark { width: 16px; height: 16px; flex: 0 0 auto; display: grid; place-items: center; background: #fff3dc; color: var(--amber); font-weight: 800; }
 .source-item { padding: 10px; background: #fff; border: 1px solid var(--line); }
 .source-item strong { display: block; font-size: 12px; margin-bottom: 5px; }
 .source-item p { color: var(--muted); font-size: 11px; line-height: 1.45; }

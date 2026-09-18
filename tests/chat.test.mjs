@@ -46,8 +46,32 @@ test('configured local model receives only the selected case context', async () 
 
   assert.equal(response.mode, 'local-model');
   assert.match(response.text, /Проверенный/);
+  assert.equal(payload.max_tokens, 96);
+  assert.deepEqual(payload.chat_template_kwargs, { enable_thinking: false });
   const serialized = JSON.stringify(payload);
   assert.match(serialized, /Сведения текущего дела/);
   assert.equal(serialized.includes('Секретные сведения другого дела'), false);
+  db.close();
+});
+
+test('a stalled local model falls back without keeping the chat request open', async () => {
+  const db = createDatabase({ dataDir: tempDataDir() });
+  const caseItem = db.createCase({ title: 'Тайм-аут модели' });
+  db.addMemory({ scope: 'law', title: 'ГПК РК', content: 'Срок обжалования', effectiveFrom: '2020-01-01' });
+  let signalProvided = false;
+  const model = createModelAdapter({
+    modelUrl: 'http://127.0.0.1:11434/v1/chat/completions',
+    fetchImpl: async (_url, options) => new Promise((_resolve, reject) => {
+      signalProvided = Boolean(options.signal);
+      if (!options.signal) return reject(new Error('missing abort signal'));
+      options.signal.addEventListener('abort', () => reject(options.signal.reason), { once: true });
+    }),
+    timeoutMs: 10,
+  });
+  const response = await createChatService({ db, model }).ask({ caseId: caseItem.id, message: 'обжалование', asOf: '2026-01-01' });
+
+  assert.equal(response.mode, 'offline');
+  assert.equal(signalProvided, true);
+  assert.match(response.warnings.join(' '), /модель недоступна/i);
   db.close();
 });

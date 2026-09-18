@@ -40,3 +40,50 @@ test('legal memory exposes only the version valid on the requested date', () => 
   assert.deepEqual(db.listLegalMemories({ asOf: '2026-06-01' }).map((row) => row.content), ['Новая редакция']);
   db.close();
 });
+
+test('documents expose processing state and chronology stays case-scoped', () => {
+  const db = createDatabase({ dataDir: tempDataDir() });
+  const first = db.createCase({ title: 'Первое дело' });
+  const second = db.createCase({ title: 'Второе дело' });
+  const stage = db.listStages(first.id)[0];
+  const document = db.addDocument({
+    caseId: first.id,
+    stageId: stage.id,
+    originalName: 'notice.txt',
+    storedPath: 'cases/notice.txt',
+    mimeType: 'text/plain',
+    status: 'queued',
+    checksum: 'abc',
+  });
+
+  assert.equal(document.progress, 0);
+  const updated = db.updateDocument(document.id, { status: 'text_extracted', progress: 100, pageCount: 2 });
+  assert.equal(updated.status, 'text_extracted');
+  assert.equal(updated.progress, 100);
+  assert.equal(updated.page_count, 2);
+
+  const event = db.addEvent({
+    caseId: first.id,
+    documentId: document.id,
+    eventDate: '2026-08-14',
+    eventDatePrecision: 'day',
+    title: 'Постановление ЧСИ',
+    description: 'Вынесено постановление',
+    sourcePage: 1,
+  });
+  const duplicate = db.addEvent({
+    caseId: first.id,
+    documentId: document.id,
+    eventDate: '2026-08-14',
+    eventDatePrecision: 'day',
+    title: 'Постановление ЧСИ',
+    description: 'Вынесено постановление',
+    sourcePage: 1,
+  });
+  assert.equal(duplicate.id, event.id);
+  assert.equal(db.listDocuments(first.id).length, 1);
+  assert.equal(db.listEvents(first.id).length, 1);
+  assert.equal(db.listEvents(second.id).length, 0);
+  assert.equal(event.status, 'suggested');
+  db.close();
+});

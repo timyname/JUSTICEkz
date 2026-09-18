@@ -72,3 +72,29 @@ test('API redaction preview does not leak a registered company name', async () =
     assert.match(preview.body.text, /Юрлицо/);
   });
 });
+
+test('API accepts a batch, lists document states, and exposes chronology', async () => {
+  await withServer(async (base) => {
+    const created = await jsonRequest(base, '/api/cases', { method: 'POST', body: JSON.stringify({ title: 'Пачка' }) });
+    const caseId = created.body.case.id;
+    const stageId = created.body.stages[0].id;
+    const documents = [
+      { fileName: 'first.txt', mimeType: 'text/plain', contentBase64: Buffer.from('Постановление 14.08.2026').toString('base64') },
+      { fileName: 'second.txt', mimeType: 'text/plain', contentBase64: Buffer.from('Оплата 20.08.2026').toString('base64') },
+    ];
+    const batch = await jsonRequest(base, `/api/cases/${caseId}/documents/batch`, { method: 'POST', body: JSON.stringify({ stageId, documents }) });
+    assert.equal(batch.status, 202);
+    assert.equal(batch.body.documents.length, 2);
+
+    let detail;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      detail = await jsonRequest(base, `/api/cases/${caseId}`);
+      if (detail.body.documents.length === 2 && detail.body.documents.every((document) => document.status === 'text_extracted')) break;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    assert.equal(detail.status, 200);
+    assert.equal(detail.body.documents.length, 2);
+    assert.equal(detail.body.events.length, 2);
+    assert.equal(detail.body.documents.every((document) => document.status === 'text_extracted'), true);
+  });
+});

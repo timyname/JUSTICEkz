@@ -25,7 +25,7 @@ export function ingestLawRecord({ db, record }) {
 async function main() {
   const inputPath = process.argv[2];
   if (!inputPath) throw new Error('Usage: npm run ingest:law -- path/to/law.json');
-  const record = JSON.parse(fs.readFileSync(path.resolve(inputPath), 'utf8'));
+  const record = JSON.parse(fs.readFileSync(path.resolve(inputPath), 'utf8').replace(/^\uFEFF/, ''));
   const db = createDatabase({ dataDir: config.dataDir });
   try {
     const item = ingestLawRecord({ db, record });

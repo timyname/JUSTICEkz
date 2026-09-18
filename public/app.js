@@ -36,6 +36,30 @@ function renderDetail() {
   $('#chat-log').scrollTop = $('#chat-log').scrollHeight;
   $('#task-count').textContent = detail.tasks.length;
   $('#task-list').innerHTML = detail.tasks.length ? detail.tasks.map((task) => `<div class="task-item"><span class="task-box"></span><span>${escapeHtml(task.title)}</span></div>`).join('') : '<div class="muted">Задачи формируются по мере работы.</div>';
+  renderDocuments(detail.documents || []);
+  renderChronology(detail.events || [], detail.questions || []);
+}
+
+const documentStatusLabels = {
+  queued: 'В очереди', processing: 'Обработка', text_extracted: 'Текст извлечён',
+  ocr_extracted: 'OCR выполнен', ocr_pending: 'Нужен OCR', converter_pending: 'Нужен конвертер DOC',
+  extraction_failed: 'Ошибка извлечения', unsupported: 'Формат не поддержан',
+};
+
+function renderDocuments(documents) {
+  $('#document-count').textContent = documents.length;
+  $('#document-list').innerHTML = documents.length ? documents.map((document) => {
+    const progress = Math.max(0, Math.min(100, Number(document.progress) || 0));
+    const status = documentStatusLabels[document.status] || document.status;
+    return `<div class="document-item"><div class="document-heading"><strong title="${escapeHtml(document.original_name)}">${escapeHtml(document.original_name)}</strong><span class="document-status status-${escapeHtml(document.status)}">${escapeHtml(status)}</span></div><div class="document-meta">${document.page_count ? `${document.page_count} стр.` : 'страницы уточняются'} · ${progress}%</div><div class="document-progress"><span style="width: ${progress}%"></span></div>${document.extraction_error ? `<p class="document-error">${escapeHtml(document.extraction_error)}</p>` : ''}</div>`;
+  }).join('') : '<div class="muted">Документы появятся после загрузки.</div>';
+}
+
+function renderChronology(events, questions) {
+  $('#event-count').textContent = events.length;
+  $('#event-list').innerHTML = events.length ? events.map((event) => `<div class="event-item"><strong>${escapeHtml(event.event_date || 'Дата не определена')}</strong><p>${escapeHtml(event.title)}</p><span>${escapeHtml(event.original_name || (event.source_page ? `страница ${event.source_page}` : 'предложение'))} · ${escapeHtml(event.status === 'suggested' ? 'нужно проверить' : event.status)}</span></div>`).join('') : '<div class="muted">Даты появятся после обработки документов.</div>';
+  $('#question-count').textContent = questions.length;
+  $('#question-list').innerHTML = questions.length ? questions.map((question) => `<div class="question-item"><span class="question-mark">?</span><span>${escapeHtml(question)}</span></div>`).join('') : '<div class="muted">Контрольные вопросы появятся по ходу работы.</div>';
 }
 
 function renderSources(sources = []) {
@@ -51,7 +75,13 @@ async function createCase(event) { const formElement = event.currentTarget.form 
 
 async function sendMessage() { const input = $('#message-input'); const message = input.value.trim(); if (!message || !state.activeCase) return; input.value = ''; const log = $('#chat-log'); if (log.querySelector('.empty-chat')) log.innerHTML = ''; log.insertAdjacentHTML('beforeend', `<div class="message user"><div class="message-meta"><span class="message-role">Вы</span></div><div class="message-bubble">${escapeHtml(message)}</div></div><div class="message assistant"><div class="message-meta"><span class="message-role">JUSTICEkz</span></div><div class="message-bubble">Собираю контекст дела и проверяю редакции права…</div></div>`); log.scrollTop = log.scrollHeight; $('#send-button').disabled = true; try { const result = await api(`/api/cases/${state.activeCase}/chat`, { method: 'POST', body: JSON.stringify({ message, asOf: state.asOf }) }); renderSources(result.sources); await selectCase(state.activeCase); } catch (error) { log.lastElementChild.querySelector('.message-bubble').textContent = error.message; } finally { $('#send-button').disabled = false; } }
 
-async function uploadDocument(event) { const file = event.target.files[0]; if (!file || !state.activeCase) return; $('#upload-hint').textContent = `Читаю ${file.name}…`; const bytes = new Uint8Array(await file.arrayBuffer()); let binary = ''; bytes.forEach((byte) => { binary += String.fromCharCode(byte); }); try { const result = await api(`/api/cases/${state.activeCase}/documents`, { method: 'POST', body: JSON.stringify({ fileName: file.name, mimeType: file.type, contentBase64: btoa(binary), stageId: state.detail.case.current_stage_id }) }); $('#upload-hint').textContent = result.status === 'ocr_pending' ? 'Файл сохранён, нужен OCR' : `Добавлено фрагментов: ${result.chunks}`; await selectCase(state.activeCase); } catch (error) { $('#upload-hint').textContent = error.message; } event.target.value = ''; }
+function bytesToBase64(bytes) { let binary = ''; const chunkSize = 0x8000; for (let index = 0; index < bytes.length; index += chunkSize) binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize)); return btoa(binary); }
+
+async function refreshDocuments(caseId) { const result = await api(`/api/cases/${encodeURIComponent(caseId)}/documents`); if (!state.detail || state.activeCase !== caseId) return; state.detail.documents = result.documents; state.detail.events = result.events; state.detail.questions = result.questions; renderDocuments(result.documents); renderChronology(result.events, result.questions); return result; }
+
+async function pollDocuments(caseId) { for (let attempt = 0; attempt < 60; attempt += 1) { const result = await refreshDocuments(caseId); if (!result || !result.documents.some((document) => ['queued', 'processing'].includes(document.status))) return; await new Promise((resolve) => setTimeout(resolve, 500)); } }
+
+async function uploadDocument(event) { const files = Array.from(event.target.files || []); if (!files.length || !state.activeCase) return; $('#upload-hint').textContent = `Ставлю в очередь: ${files.length} файл${files.length === 1 ? '' : 'а'}…`; try { const documents = await Promise.all(files.map(async (file) => ({ fileName: file.name, mimeType: file.type, contentBase64: bytesToBase64(new Uint8Array(await file.arrayBuffer())) }))); const result = await api(`/api/cases/${state.activeCase}/documents/batch`, { method: 'POST', body: JSON.stringify({ documents, stageId: state.detail.case.current_stage_id }) }); $('#upload-hint').textContent = `В очереди документов: ${result.documents.length}`; await selectCase(state.activeCase); await pollDocuments(state.activeCase); const finished = state.detail.documents.filter((document) => ['text_extracted', 'ocr_extracted'].includes(document.status)).length; $('#upload-hint').textContent = `Обработано: ${finished} из ${files.length}`; } catch (error) { $('#upload-hint').textContent = error.message; } event.target.value = ''; }
 
 async function runRedaction() { if (!state.activeCase) return; const text = $('#redaction-form textarea').value; const result = await api(`/api/cases/${state.activeCase}/redact`, { method: 'POST', body: JSON.stringify({ text }) }); const box = $('#redaction-result'); box.classList.remove('hidden'); box.textContent = result.text || 'Нет текста для обезличивания.'; }
 

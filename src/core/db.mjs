@@ -53,6 +53,11 @@ export function createDatabase({ dataDir }) {
       mime_type TEXT,
       status TEXT NOT NULL,
       checksum TEXT NOT NULL,
+      progress INTEGER NOT NULL DEFAULT 0,
+      page_count INTEGER NOT NULL DEFAULT 0,
+      extraction_error TEXT,
+      started_at TEXT,
+      processed_at TEXT,
       imported_at TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS memories (
@@ -105,6 +110,40 @@ export function createDatabase({ dataDir }) {
       created_at TEXT NOT NULL,
       UNIQUE(case_id, token)
     );
+    CREATE TABLE IF NOT EXISTS case_events (
+      id TEXT PRIMARY KEY,
+      case_id TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+      document_id TEXT REFERENCES documents(id) ON DELETE CASCADE,
+      stage_id TEXT REFERENCES stages(id) ON DELETE SET NULL,
+      event_date TEXT,
+      event_date_precision TEXT NOT NULL DEFAULT 'unknown',
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      source_page INTEGER,
+      status TEXT NOT NULL DEFAULT 'suggested',
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS case_events_case_idx ON case_events(case_id, event_date, created_at);
+  `);
+
+  const existingColumns = new Set(database.prepare('PRAGMA table_info(documents)').all().map((column) => column.name));
+  const documentMigrations = [
+    ['progress', 'INTEGER NOT NULL DEFAULT 0'],
+    ['page_count', 'INTEGER NOT NULL DEFAULT 0'],
+    ['extraction_error', 'TEXT'],
+    ['started_at', 'TEXT'],
+    ['processed_at', 'TEXT'],
+  ];
+  for (const [column, definition] of documentMigrations) {
+    if (!existingColumns.has(column)) database.exec(`ALTER TABLE documents ADD COLUMN ${column} ${definition}`);
+  }
+  database.exec(`
+    UPDATE documents SET progress = 100
+      WHERE progress = 0 AND status IN ('text_extracted', 'ocr_extracted');
+    UPDATE documents SET page_count = COALESCE(
+      (SELECT MAX(COALESCE(page_number, 1)) FROM memories WHERE memories.document_id = documents.id),
+      page_count
+    ) WHERE page_count = 0;
   `);
 
   function createCase({ title, number = '', actionDate = null }) {
@@ -158,14 +197,58 @@ export function createDatabase({ dataDir }) {
     return rowToObject(database.prepare('SELECT * FROM memories WHERE id = ?').get(id));
   }
 
-  function addDocument({ caseId, stageId = null, originalName, storedPath, mimeType = null, status, checksum }) {
+  function addDocument({ caseId, stageId = null, originalName, storedPath, mimeType = null, status, checksum,
+    progress = 0, pageCount = 0, extractionError = null, startedAt = null, processedAt = null }) {
     const id = `document-${randomUUID()}`;
     database.prepare(`INSERT INTO documents
-      (id, case_id, stage_id, original_name, stored_path, mime_type, status, checksum, imported_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-      id, caseId, stageId, originalName, storedPath, mimeType, status, checksum, now(),
+      (id, case_id, stage_id, original_name, stored_path, mime_type, status, checksum, progress, page_count,
+       extraction_error, started_at, processed_at, imported_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      id, caseId, stageId, originalName, storedPath, mimeType, status, checksum, progress, pageCount,
+      extractionError, startedAt, processedAt, now(),
     );
     return rowToObject(database.prepare('SELECT * FROM documents WHERE id = ?').get(id));
+  }
+
+  function updateDocument(documentId, updates = {}) {
+    const allowed = new Map([
+      ['status', 'status'], ['progress', 'progress'], ['pageCount', 'page_count'],
+      ['extractionError', 'extraction_error'], ['startedAt', 'started_at'], ['processedAt', 'processed_at'],
+    ]);
+    const entries = Object.entries(updates).filter(([key]) => allowed.has(key));
+    if (!entries.length) return rowToObject(database.prepare('SELECT * FROM documents WHERE id = ?').get(documentId));
+    const assignments = entries.map(([key]) => `${allowed.get(key)} = ?`).join(', ');
+    const values = entries.map(([, value]) => value);
+    database.prepare(`UPDATE documents SET ${assignments} WHERE id = ?`).run(...values, documentId);
+    return rowToObject(database.prepare('SELECT * FROM documents WHERE id = ?').get(documentId));
+  }
+
+  function getDocument(documentId) {
+    return rowToObject(database.prepare('SELECT * FROM documents WHERE id = ?').get(documentId));
+  }
+
+  function listDocuments(caseId) {
+    return database.prepare('SELECT * FROM documents WHERE case_id = ? ORDER BY imported_at, rowid').all(caseId).map(rowToObject);
+  }
+
+  function addEvent({ caseId, documentId = null, stageId = null, eventDate = null, eventDatePrecision = 'unknown',
+    title, description, sourcePage = null, status = 'suggested' }) {
+    const existing = database.prepare(`SELECT * FROM case_events
+      WHERE case_id = ? AND document_id IS ? AND event_date IS ? AND description = ?`).get(caseId, documentId, eventDate, description);
+    if (existing) return rowToObject(existing);
+    const id = `event-${randomUUID()}`;
+    database.prepare(`INSERT INTO case_events
+      (id, case_id, document_id, stage_id, event_date, event_date_precision, title, description, source_page, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      id, caseId, documentId, stageId, eventDate, eventDatePrecision, title, description, sourcePage, status, now(),
+    );
+    return rowToObject(database.prepare('SELECT * FROM case_events WHERE id = ?').get(id));
+  }
+
+  function listEvents(caseId) {
+    return database.prepare(`SELECT case_events.*, documents.original_name
+      FROM case_events LEFT JOIN documents ON documents.id = case_events.document_id
+      WHERE case_events.case_id = ? ORDER BY event_date IS NULL, event_date, source_page IS NULL, source_page, created_at`).all(caseId).map(rowToObject);
   }
 
   function listMemories({ scope, caseId = null } = {}) {
@@ -229,6 +312,11 @@ export function createDatabase({ dataDir }) {
     setCurrentStage,
     addMemory,
     addDocument,
+    updateDocument,
+    getDocument,
+    listDocuments,
+    addEvent,
+    listEvents,
     listMemories,
     listLegalMemories,
     addMessage,

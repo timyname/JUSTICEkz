@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { config as defaultConfig } from '../config.mjs';
 import { createDatabase } from '../core/db.mjs';
 import { ingestDocument } from '../core/ingest.mjs';
+import { createDocumentQueue } from '../core/processing.mjs';
 import { createRedactor } from '../core/redaction.mjs';
 import { createModelAdapter } from '../core/model.mjs';
 import { createChatService } from '../core/chat.mjs';
@@ -30,7 +31,7 @@ async function readJson(request) {
   let total = 0;
   for await (const chunk of request) {
     total += chunk.length;
-    if (total > 25 * 1024 * 1024) throw new Error('Request is too large');
+    if (total > 64 * 1024 * 1024) throw new Error('Request is too large');
     chunks.push(chunk);
   }
   if (!chunks.length) return {};
@@ -48,6 +49,23 @@ function requireCase(db, caseId) {
   return caseItem;
 }
 
+function buildCaseQuestions(documents, events) {
+  const questions = [];
+  if (documents.some((document) => ['queued', 'processing'].includes(document.status))) {
+    questions.push('Дождаться завершения обработки документов, которые ещё находятся в очереди.');
+  }
+  if (documents.some((document) => ['ocr_pending', 'converter_pending', 'unsupported'].includes(document.status))) {
+    questions.push('Проверить документы, для которых на компьютере пока нет нужного OCR или конвертера.');
+  }
+  if (documents.length && !events.length) {
+    questions.push('Уточнить даты ключевых событий: пока в документах не найдено ни одного датированного события.');
+  }
+  if (events.some((event) => event.status === 'suggested')) {
+    questions.push('Проверить предложенные даты и отметить события как подтверждённые или отклонённые.');
+  }
+  return questions;
+}
+
 function safeStaticPath(urlPath) {
   const relative = urlPath === '/' ? 'index.html' : urlPath.replace(/^\//, '');
   const full = path.resolve(publicDir, relative);
@@ -60,13 +78,14 @@ export function createApplication({ dataDir = defaultConfig.dataDir, modelUrl = 
   const redactor = createRedactor({ db, dataDir });
   const model = createModelAdapter({ modelUrl, modelName });
   const chat = createChatService({ db, model });
+  const documentQueue = createDocumentQueue({ db, dataDir });
 
   const server = http.createServer(async (request, response) => {
     try {
       const requestUrl = new URL(request.url, `http://${request.headers.host || 'localhost'}`);
       const { pathname } = requestUrl;
       if (request.method === 'GET' && pathname === '/api/health') {
-        return sendJson(response, 200, { status: 'ok', modelConfigured: model.configured, version: '0.1.0' });
+        return sendJson(response, 200, { status: 'ok', modelConfigured: model.configured, modelName: modelName ?? null, version: '0.2.0' });
       }
       if (pathname.startsWith('/api/')) {
         const parts = pathname.split('/').filter(Boolean).map(decodeURIComponent);
@@ -83,11 +102,38 @@ export function createApplication({ dataDir = defaultConfig.dataDir, modelUrl = 
           const caseId = parts[2];
           const caseItem = requireCase(db, caseId);
           if (request.method === 'GET' && parts.length === 3) {
-            return sendJson(response, 200, { case: caseItem, stages: db.listStages(caseId), tasks: db.listTasks(caseId), messages: db.listMessages(caseId) });
+            const documents = db.listDocuments(caseId);
+            const events = db.listEvents(caseId);
+            return sendJson(response, 200, {
+              case: caseItem, stages: db.listStages(caseId), tasks: db.listTasks(caseId), messages: db.listMessages(caseId),
+              documents, events, questions: buildCaseQuestions(documents, events), queueRunning: documentQueue.running,
+            });
           }
           if (request.method === 'POST' && parts[3] === 'stages' && parts[4] === 'current') {
             const body = await readJson(request);
             return sendJson(response, 200, { case: db.setCurrentStage(caseId, body.stageId), stages: db.listStages(caseId) });
+          }
+          if (request.method === 'GET' && parts[3] === 'documents') {
+            const documents = db.listDocuments(caseId);
+            const events = db.listEvents(caseId);
+            return sendJson(response, 200, { documents, events, questions: buildCaseQuestions(documents, events), queueRunning: documentQueue.running });
+          }
+          if (request.method === 'POST' && parts[3] === 'documents' && parts[4] === 'batch') {
+            const body = await readJson(request);
+            if (!Array.isArray(body.documents) || !body.documents.length) return sendError(response, 400, 'documents must be a non-empty array');
+            const documents = body.documents.map((item) => ({
+              fileName: item.fileName,
+              mimeType: item.mimeType,
+              buffer: item.contentBase64 ? Buffer.from(item.contentBase64, 'base64') : null,
+            }));
+            if (documents.some((item) => !item.fileName || !item.buffer)) return sendError(response, 400, 'every document needs fileName and contentBase64');
+            const jobs = documentQueue.enqueueBatch({ caseId, stageId: body.stageId ?? caseItem.current_stage_id, documents });
+            const storedDocuments = db.listDocuments(caseId);
+            const events = db.listEvents(caseId);
+            return sendJson(response, 202, {
+              jobs: jobs.map((job) => ({ documentId: job.documentId, error: job.error?.message ?? null })),
+              documents: storedDocuments, events, questions: buildCaseQuestions(storedDocuments, events),
+            });
           }
           if (request.method === 'POST' && parts[3] === 'documents') {
             const body = await readJson(request);

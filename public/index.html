@@ -31,13 +31,16 @@
           <div class="chat-panel">
             <div class="chat-log" id="chat-log"><div class="empty-chat"><div class="empty-chat-icon">J</div><h3>Начните работу с делом</h3><p>Загрузите документ или задайте вопрос. Контекст будет собираться только внутри выбранного дела.</p></div></div>
             <div class="composer-wrap">
-              <div class="composer-tools"><label class="file-button"><span>Добавить документ</span><input type="file" id="document-input" accept=".txt,.md,.csv,.json,.pdf,.png,.jpg,.jpeg,.tif,.tiff"></label><span class="upload-hint" id="upload-hint">Текст, PDF или скан</span></div>
+              <div class="composer-tools"><label class="file-button"><span>Добавить документы</span><input type="file" id="document-input" multiple accept=".txt,.md,.csv,.json,.pdf,.doc,.docx,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp"></label><span class="upload-hint" id="upload-hint">Можно выбрать несколько файлов</span></div>
               <div class="composer"><textarea id="message-input" rows="2" placeholder="Опишите вопрос по текущему делу..."></textarea><button class="send-button" id="send-button">Отправить <span>↗</span></button></div>
             </div>
           </div>
         </section>
 
         <aside class="context-panel panel-right">
+          <div class="context-section"><div class="section-heading"><span class="eyebrow">Документы дела</span><span class="count-badge" id="document-count">0</span></div><div id="document-list" class="document-list"><div class="muted">Документы появятся после загрузки.</div></div></div>
+          <div class="context-section"><div class="section-heading"><span class="eyebrow">Хронология</span><span class="count-badge" id="event-count">0</span></div><div id="event-list" class="event-list"><div class="muted">Даты появятся после обработки документов.</div></div></div>
+          <div class="context-section"><div class="section-heading"><span class="eyebrow">Проверить</span><span class="count-badge" id="question-count">0</span></div><div id="question-list" class="question-list"><div class="muted">Контрольные вопросы появятся по ходу работы.</div></div></div>
           <div class="context-section"><div class="section-heading"><span class="eyebrow">Найдено в праве</span><span class="count-badge" id="source-count">0</span></div><div id="source-list" class="source-list"><div class="muted">Источники появятся после вопроса.</div></div></div>
           <div class="context-section"><div class="section-heading"><span class="eyebrow">Следующие действия</span><span class="count-badge" id="task-count">0</span></div><div id="task-list" class="task-list"><div class="muted">Задачи формируются по мере работы.</div></div></div>
           <div class="context-section memory-note"><div class="eyebrow">Границы памяти</div><p><strong>Правовая база</strong><br>Редакции НПА и источники на выбранную дату.</p><p><strong>Память дела</strong><br>Только документы и факты текущего проекта.</p></div>

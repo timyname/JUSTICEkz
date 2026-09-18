@@ -19,6 +19,14 @@ npm start
 
 Open <http://127.0.0.1:4317>.
 
+## Local model and document tools
+
+The supported low-memory setup is a local `Qwen3-0.6B-Q8_0.gguf` server through llama.cpp. Run `powershell -ExecutionPolicy Bypass -File scripts/setup-local-model.ps1`, then restart the server. The model endpoint is `127.0.0.1`; documents are not sent to a model provider or to the Internet by the application.
+
+For text extraction and OCR, install the local tools separately when needed: Poppler (`pdftotext` and `pdftoppm`), Tesseract with Russian and Kazakh language packs, and LibreOffice for legacy `.doc`. On Windows, the repository includes `powershell -ExecutionPolicy Bypass -File scripts/setup-ocr.ps1`; the application also searches `.justicekz/tools/Tesseract-OCR`. The browser accepts multiple files and shows a per-document status. DOCX is parsed without an external dependency.
+
+To download a first set of official Adilet pages, run `powershell -ExecutionPolicy Bypass -File scripts/fetch-official-laws.ps1`. The script stores raw pages and SHA-256 metadata under `.justicekz/data/legal/official`; it does not put downloaded law text into Git. Import only reviewed records with explicit act dates using `node scripts/ingest-law.mjs path/to/law.json`. The downloaded pages are current consolidated snapshots; historical analysis requires importing a separately dated snapshot for the relevant редакция.
+
 ## Project boundaries
 
 - `src/core` contains storage, search, ingestion, redaction, chat, and export logic.

@@ -1,5 +1,16 @@
+import fs from 'node:fs';
 import path from 'node:path';
 
+function loadDotEnv() {
+  const envPath = path.resolve(process.cwd(), '.env');
+  if (!fs.existsSync(envPath)) return;
+  for (const line of fs.readFileSync(envPath, 'utf8').split(/\r?\n/)) {
+    const match = line.match(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*?)\s*$/);
+    if (match && process.env[match[1]] === undefined) process.env[match[1]] = match[2].replace(/^['"]|['"]$/g, '');
+  }
+}
+
+loadDotEnv();
 const portValue = Number.parseInt(process.env.JUSTICE_PORT ?? '4317', 10);
 
 export const config = Object.freeze({
