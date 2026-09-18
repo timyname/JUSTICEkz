@@ -19,6 +19,15 @@ if ($process.ExitCode -ne 0) { throw "Tesseract installer returned exit code $($
 
 $binary = Join-Path $toolDir "tesseract.exe"
 if (-not (Test-Path $binary)) { throw "Tesseract was not installed at $binary." }
+$tessdataDir = Join-Path $toolDir "tessdata"
+New-Item -ItemType Directory -Force -Path $tessdataDir | Out-Null
+foreach ($language in @("rus", "kaz")) {
+  $languagePath = Join-Path $tessdataDir "$language.traineddata"
+  if (-not (Test-Path $languagePath)) {
+    Invoke-WebRequest -Uri "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/$language.traineddata" -OutFile $languagePath -UseBasicParsing
+  }
+  if ((Get-Item $languagePath).Length -lt 100000) { throw "Tesseract language data is incomplete: $language" }
+}
 & $binary --version
 & $binary --list-langs
 Write-Host "Tesseract is installed locally. Restart JUSTICEkz to use OCR."
