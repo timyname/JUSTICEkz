@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>JUSTICEkz · локальный кабинет</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand"><span class="brand-mark">J</span><span>JUSTICE<span class="brand-accent">kz</span></span></div>
+        <div class="topbar-meta"><span class="local-dot"></span><span>Локально</span><span class="divider"></span><span id="model-status">Модель не подключена</span></div>
+      </header>
+
+      <main class="workspace-grid">
+        <aside class="sidebar panel-left">
+          <div class="sidebar-heading"><div><span class="eyebrow">Рабочие дела</span><h1>Мои проекты</h1></div><button class="icon-button" id="new-case-button" title="Создать новое дело" aria-label="Создать новое дело">+</button></div>
+          <div class="case-list" id="case-list"><div class="empty-state compact">Загрузка дел...</div></div>
+          <div class="sidebar-foot"><span class="privacy-lock">●</span> Данные дел хранятся на этом компьютере</div>
+        </aside>
+
+        <section class="main-column">
+          <div class="case-toolbar panel-top" id="case-toolbar">
+            <div class="case-heading"><span class="eyebrow" id="case-number">Нет выбранного дела</span><h2 id="case-title">Создайте первое дело</h2></div>
+            <div class="toolbar-actions"><label class="date-control">Право на дату <input id="as-of-date" type="date"></label><button class="text-button" id="redaction-button">Предпросмотр обезличивания</button><button class="text-button" id="export-button">Скачать DOCX</button></div>
+          </div>
+
+          <div class="stage-strip" id="stage-strip"></div>
+
+          <div class="chat-panel">
+            <div class="chat-log" id="chat-log"><div class="empty-chat"><div class="empty-chat-icon">J</div><h3>Начните работу с делом</h3><p>Загрузите документ или задайте вопрос. Контекст будет собираться только внутри выбранного дела.</p></div></div>
+            <div class="composer-wrap">
+              <div class="composer-tools"><label class="file-button"><span>Добавить документ</span><input type="file" id="document-input" accept=".txt,.md,.csv,.json,.pdf,.png,.jpg,.jpeg,.tif,.tiff"></label><span class="upload-hint" id="upload-hint">Текст, PDF или скан</span></div>
+              <div class="composer"><textarea id="message-input" rows="2" placeholder="Опишите вопрос по текущему делу..."></textarea><button class="send-button" id="send-button">Отправить <span>↗</span></button></div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="context-panel panel-right">
+          <div class="context-section"><div class="section-heading"><span class="eyebrow">Найдено в праве</span><span class="count-badge" id="source-count">0</span></div><div id="source-list" class="source-list"><div class="muted">Источники появятся после вопроса.</div></div></div>
+          <div class="context-section"><div class="section-heading"><span class="eyebrow">Следующие действия</span><span class="count-badge" id="task-count">0</span></div><div id="task-list" class="task-list"><div class="muted">Задачи формируются по мере работы.</div></div></div>
+          <div class="context-section memory-note"><div class="eyebrow">Границы памяти</div><p><strong>Правовая база</strong><br>Редакции НПА и источники на выбранную дату.</p><p><strong>Память дела</strong><br>Только документы и факты текущего проекта.</p></div>
+        </aside>
+      </main>
+    </div>
+
+    <dialog id="new-case-dialog" class="dialog"><form method="dialog" id="new-case-form"><div class="dialog-heading"><div><span class="eyebrow">Новый проект</span><h2>Создать дело</h2></div><button type="button" id="close-case-dialog" class="close-button" aria-label="Закрыть">×</button></div><label>Название дела<input name="title" required placeholder="Например: обжалование действий ЧСИ"></label><label>Номер или внутренний код<input name="number" placeholder="Необязательно"></label><label>Дата действия<input name="actionDate" type="date"></label><div class="dialog-actions"><button type="button" id="cancel-case-dialog" class="secondary-button">Отмена</button><button type="button" id="create-case-submit" class="primary-button">Создать дело</button></div></form></dialog>
+    <dialog id="redaction-dialog" class="dialog"><form method="dialog" id="redaction-form"><div class="dialog-heading"><div><span class="eyebrow">Приватность</span><h2>Обезличенный предпросмотр</h2></div><button value="cancel" class="close-button" aria-label="Закрыть">×</button></div><p class="dialog-copy">Введите фрагмент, который планируется передать внешней модели. Замены выполняются локально, а таблица соответствий не покидает компьютер.</p><textarea name="text" rows="6" placeholder="Вставьте текст с названиями, БИН, адресами..."></textarea><div id="redaction-result" class="redaction-result hidden"></div><div class="dialog-actions"><button type="button" class="secondary-button" id="run-redaction">Обезличить</button><button value="cancel" class="primary-button">Закрыть</button></div></form></dialog>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

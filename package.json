@@ -1,0 +1,15 @@
+{
+  "name": "justicekz",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Local-first legal AI assistant for Kazakhstan",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server/server.mjs",
+    "test": "node --test",
+    "ingest:law": "node scripts/ingest-law.mjs"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

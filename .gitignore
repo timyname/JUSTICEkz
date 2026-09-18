@@ -1,0 +1,11 @@
+.justicekz/
+.env
+.superpowers/
+node_modules/
+*.log
+exports/
+models/
+data/legal/*
+data/cases/*
+!data/legal/.gitkeep
+!data/cases/.gitkeep
