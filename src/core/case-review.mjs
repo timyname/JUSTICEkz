@@ -19,6 +19,71 @@ function unique(values) {
   return [...new Set(values.filter(Boolean))];
 }
 
+function partyCandidates(corpus) {
+  const matches = [...corpus.matchAll(/\b(?:тоо|ао|ип|кх|ргу|гкп)\s+[а-яёa-z0-9«»"'.-]+(?:\s+[а-яёa-z0-9«»"'.-]+){0,4}/giu)]
+    .map((match) => match[0].replace(/\s+/g, ' ').trim())
+    .filter((value) => value.length > 4 && !/(бенефициар|иик|кбк|сумма|казахстан)/i.test(value) && /\b(?:тоо|ао|ип)\b/i.test(value));
+  return unique(matches).slice(0, 5);
+}
+
+function buildBriefing({ caseItem, stage, corpus, events }) {
+  const enforcement = includesAny(`${caseItem.title} ${corpus}`, [/чси/, /исполнительн/, /взыскан/]);
+  const caseType = enforcement ? 'Спор об исполнительном производстве и оспаривании долга' : 'Гражданско-правовой спор; вид требует уточнения';
+  const candidates = partyCandidates(corpus);
+  const parties = candidates.length
+    ? candidates.map((party) => `${party} — участник по тексту; роль требуется подтвердить`)
+    : ['Полные наименования сторон в доступных фрагментах не выделены; проверить оригиналы.'];
+  const obligations = enforcement
+    ? ['Проверить основание, размер и исполнение заявленного долга, а также полномочия и порядок действий ЧСИ.']
+    : ['Содержание обязательств и основание требований нужно подтвердить договором, актом или иным первичным документом.'];
+  const requests = [];
+  if (includesAny(corpus, [/отмен/, /отзыв/, /оспор/, /обжал/])) requests.push('По материалам видны требования об отмене, отзыве или оспаривании отдельных действий/документов; точную просительную часть нужно подтвердить.');
+  if (includesAny(corpus, [/взыскан/, /инкассов/, /долг/])) requests.push('Проверить требование о прекращении взыскания или оспаривании долга и его размера.');
+  if (!requests.length) requests.push('Требования стороны пока не сформулированы достаточно ясно.');
+  const whatHappened = [];
+  if (enforcement) whatHappened.push('В материалах встречаются документы исполнительного производства, взыскания и/или инкассовых распоряжений.');
+  if (events.length) whatHappened.push(`В хронологии есть ${russianCount(events.length, 'датированное событие', 'датированных события', 'датированных событий')}; даты пока требуют сверки с оригиналами.`);
+  if (!whatHappened.length) whatHappened.push('Фактическая последовательность событий пока не подтверждена достаточными фрагментами.');
+  return {
+    caseType,
+    parties,
+    obligations,
+    requests,
+    whatHappened,
+    currentPosition: stage?.title ?? 'Процессуальный блок не определён',
+    short: `${caseType}. ${whatHappened[0]} Текущий блок: ${stage?.title ?? 'не определён'}.`,
+    detailed: 'Сводка построена по именам файлов, извлечённым фрагментам и предложениям хронологии. Статус каждого существенного факта нужно проверить по оригиналу документа.',
+  };
+}
+
+function buildDateAnchors(events) {
+  return events.map((event) => ({
+    date: event.event_date,
+    title: event.title,
+    description: event.description,
+    source: event.original_name || (event.source_page ? `страница ${event.source_page}` : 'материалы дела'),
+    status: event.status === 'confirmed' ? 'confirmed' : 'proposal',
+  }));
+}
+
+function buildViolations({ caseItem, corpus, events, failedDocuments }) {
+  const items = [];
+  const enforcement = includesAny(`${caseItem.title} ${corpus}`, [/чси/, /исполнительн/, /взыскан/]);
+  if (enforcement && !includesAny(corpus, [/вручен/, /\bполучен(?:о|а|ы)?\b/, /доставлен/, /уведомлен/, /извещен/])) {
+    items.push({ title: 'Возможная проблема с уведомлением или вручением', status: 'требует проверки', basis: 'В доступном корпусе нет надёжного подтверждения получения ключевого документа.', date: events[0]?.event_date ?? null, nextStep: 'Найти отметку о вручении, электронное уведомление или иной идентификатор доставки.' });
+  }
+  if (enforcement && includesAny(corpus, [/инкассов/, /распоряжен/])) {
+    items.push({ title: 'Основания инкассового взыскания требуют проверки', status: 'контрольная точка', basis: 'Нужно сопоставить документ-основание, сумму, дату, полномочия и порядок направления распоряжения.', date: events.find((event) => /инкассов/i.test(event.title))?.event_date ?? null, nextStep: 'Собрать цепочку основания долга → постановление → распоряжение → отзыв/обжалование.' });
+  }
+  if (events.length && events.some((event) => event.status !== 'confirmed')) {
+    items.push({ title: 'Процессуальные сроки могут быть оценены неверно', status: 'требует проверки', basis: 'Часть дат является предложением по источнику и ещё не подтверждена пользователем.', date: events[0]?.event_date ?? null, nextStep: 'Отметить каждую опорную дату как подтверждённую или отклонённую и указать страницу.' });
+  }
+  if (failedDocuments.length) {
+    items.push({ title: 'Полнота оценки ограничена непрочитанными файлами', status: 'ограничение анализа', basis: `${russianCount(failedDocuments.length, 'файл', 'файла', 'файлов')} не дали полноценный текст; в них могут быть важные обстоятельства.`, date: null, nextStep: 'Повторить OCR или добавить читаемую копию.' });
+  }
+  return items;
+}
+
 function reportText(report) {
   const lines = [
     'ПЕРВИЧНЫЙ РАЗБОР ДЕЛА',
@@ -52,6 +117,9 @@ function buildReport({ caseItem, stage, documents, memories, events }) {
   const failedDocuments = documents.filter((document) => !['text_extracted', 'ocr_extracted'].includes(document.status));
   const textDocuments = documents.filter((document) => document.status === 'text_extracted').length;
   const ocrDocuments = documents.filter((document) => document.status === 'ocr_extracted').length;
+  const briefing = buildBriefing({ caseItem, stage, corpus, events });
+  const dateAnchors = buildDateAnchors(events);
+  const violations = buildViolations({ caseItem, corpus, events, failedDocuments });
   const findings = [
     `Проверено ${russianCount(documents.length, 'документ', 'документа', 'документов')}: текст извлечён из ${textDocuments}, OCR выполнен для ${ocrDocuments}.`,
     `В память дела записано ${memories.length} фрагментов; в хронологии найдено ${events.length} датированных предложений по источникам (повторы не исключены).`,
@@ -65,7 +133,7 @@ function buildReport({ caseItem, stage, documents, memories, events }) {
   if (includesAny(`${caseItem.title} ${corpus}`, [/чси/, /исполнительн/, /взыскан/]) && !includesAny(corpus, [/постановлен/, /уведомлен/, /извещен/])) {
     gaps.push('Для спора с ЧСИ не найдено понятное постановление или извещение, которое является предметом проверки.');
   }
-  if (!includesAny(corpus, [/вручен/, /получен/, /доставлен/, /уведомлен/, /извещен/])) gaps.push('Не найдено подтверждение получения или вручения ключевого документа; проверить сроки от этой даты.');
+  if (!includesAny(corpus, [/вручен/, /\bполучен(?:о|а|ы)?\b/, /доставлен/, /уведомлен/, /извещен/])) gaps.push('Не найдено подтверждение получения или вручения ключевого документа; проверить сроки от этой даты.');
   if (!includesAny(corpus, [/доказател/, /приложен/, /квитанц/, /оплат/, /расчет/])) gaps.push('Не найден явный комплект подтверждающих документов или расчёт; составить перечень приложений.');
   if (!includesAny(corpus, [/представител/, /доверенност/, /полномоч/])) gaps.push('Не найден документ о полномочиях представителя; проверить, нужен ли он для текущего действия.');
   if (failedDocuments.length) {
@@ -109,6 +177,14 @@ function buildReport({ caseItem, stage, documents, memories, events }) {
     options,
     forecast,
     nextTasks,
+    briefing,
+    dateAnchors,
+    violations,
+    draftPlan: [
+      { id: 'additional_requirements', title: 'Дополнительные требования', description: 'Собрать уточнение требований, факты, расчёт и приложения.', readiness: 'после подтверждения предмета и сроков' },
+      { id: 'new_statement', title: 'Новое заявление', description: 'Выбрать адресата, предмет заявления и подтверждающие документы.', readiness: 'после подтверждения адресата и процессуальной роли' },
+      { id: 'debt_challenge', title: 'Иск об оспаривании долга', description: 'Собрать основание долга, разногласия по сумме, хронологию взыскания и просительную часть.', readiness: 'после проверки основания долга и даты получения' },
+    ],
     modelSummary: null,
   };
 }

@@ -29,3 +29,24 @@ test('DOCX export is a readable ZIP package with document text', () => {
   assert.match(docx.toString('utf8'), /Спор с ЧСИ/);
   assert.match(docx.toString('utf8'), /ГПК РК/);
 });
+
+test('draft export includes the confirmed case goal and document outline', () => {
+  const markdown = buildDraftMarkdown({
+    ...draft,
+    goalDraft: {
+      title: 'Проект иска об оспаривании долга',
+      documentType: 'Исковое заявление об оспаривании долга',
+      purpose: 'Оспорить долг',
+      facts: ['Взыскание отражено в материалах дела.'],
+      timeline: [{ date: '2026-08-10', title: 'Постановление', status: 'proposal' }],
+      requests: ['Проверить законность взыскания.'],
+      attachments: ['Постановление ЧСИ'],
+      unknowns: ['Подтвердить дату получения.'],
+    },
+  });
+
+  assert.match(markdown, /Цель обращения/);
+  assert.match(markdown, /Проект иска об оспаривании долга/);
+  assert.match(markdown, /2026-08-10/);
+  assert.match(markdown, /Подтвердить дату получения/);
+});

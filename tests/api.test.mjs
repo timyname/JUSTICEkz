@@ -73,6 +73,24 @@ test('API redaction preview does not leak a registered company name', async () =
   });
 });
 
+test('API saves a client goal and returns a case-specific draft plan', async () => {
+  await withServer(async (base) => {
+    const created = await jsonRequest(base, '/api/cases', { method: 'POST', body: JSON.stringify({ title: 'ЭКСПЕРТ ПЛЮС' }) });
+    const caseId = created.body.case.id;
+    const saved = await jsonRequest(base, `/api/cases/${caseId}/goal`, {
+      method: 'POST',
+      body: JSON.stringify({ goal: 'debt_challenge', customGoal: 'Оспорить долг' }),
+    });
+
+    assert.equal(saved.status, 200);
+    assert.equal(saved.body.goal.code, 'debt_challenge');
+    assert.match(saved.body.draft.documentType, /иск/i);
+
+    const detail = await jsonRequest(base, `/api/cases/${caseId}`);
+    assert.equal(detail.body.goal.goal.code, 'debt_challenge');
+  });
+});
+
 test('API accepts a batch, lists document states, and exposes chronology', async () => {
   await withServer(async (base) => {
     const created = await jsonRequest(base, '/api/cases', { method: 'POST', body: JSON.stringify({ title: 'Пачка' }) });

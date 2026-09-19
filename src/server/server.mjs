@@ -12,6 +12,7 @@ import { collectCaseFiles } from '../core/folder-import.mjs';
 import { createRedactor } from '../core/redaction.mjs';
 import { createModelAdapter } from '../core/model.mjs';
 import { createChatService } from '../core/chat.mjs';
+import { createCaseGoalService } from '../core/case-goal.mjs';
 import { buildContext } from '../core/context.mjs';
 import { buildDraftMarkdown, buildPrintableHtml, buildDocx } from '../core/export.mjs';
 
@@ -81,6 +82,7 @@ export function createApplication({ dataDir = defaultConfig.dataDir, modelUrl = 
   const model = createModelAdapter({ modelUrl, modelName });
   const chat = createChatService({ db, model });
   const reviewService = suppliedReviewService ?? createCaseReviewService({ db, model: reviewModel === undefined ? model : reviewModel });
+  const caseGoal = createCaseGoalService({ db });
   const documentQueue = createDocumentQueue({ db, dataDir, reviewService });
 
   const server = http.createServer(async (request, response) => {
@@ -110,8 +112,14 @@ export function createApplication({ dataDir = defaultConfig.dataDir, modelUrl = 
             return sendJson(response, 200, {
               case: caseItem, stages: db.listStages(caseId), tasks: db.listTasks(caseId), messages: db.listMessages(caseId),
               documents, events, questions: buildCaseQuestions(documents, events), queueRunning: documentQueue.running,
+              goal: caseGoal.latest(caseId),
               processing: { active: db.getActiveBatch(caseId), latest: db.listBatches(caseId)[0] ?? null, review: db.getLatestReview(caseId) },
             });
+          }
+          if (request.method === 'POST' && parts[3] === 'goal') {
+            const body = await readJson(request);
+            if (!body.goal && !body.customGoal?.trim()) return sendError(response, 400, 'goal or customGoal is required');
+            return sendJson(response, 200, caseGoal.save({ caseId, goal: body.goal, customGoal: body.customGoal }));
           }
           if (request.method === 'POST' && parts[3] === 'stages' && parts[4] === 'current') {
             const body = await readJson(request);
@@ -192,9 +200,10 @@ export function createApplication({ dataDir = defaultConfig.dataDir, modelUrl = 
             const messages = db.listMessages(caseId);
             const lastUser = [...messages].reverse().find((item) => item.role === 'user');
             const context = lastUser ? buildContext({ db, caseId, message: lastUser.content, asOf: dateOrToday(requestUrl.searchParams.get('asOf') ?? caseItem.action_date) }) : { legalSources: [], caseDocuments: [] };
+            const savedGoal = caseGoal.latest(caseId);
             const draft = {
               caseTitle: caseItem.title, caseNumber: caseItem.number, stageTitle: stage?.title,
-              asOf: dateOrToday(requestUrl.searchParams.get('asOf') ?? caseItem.action_date), messages,
+              asOf: dateOrToday(requestUrl.searchParams.get('asOf') ?? caseItem.action_date), messages, goalDraft: savedGoal?.draft ?? null,
               sources: context.legalSources, caseDocuments: db.listMemories({ scope: 'case', caseId }),
             };
             if (format === 'docx') {

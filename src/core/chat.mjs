@@ -1,6 +1,6 @@
 import { buildContext } from './context.mjs';
 
-function offlineText({ context, asOf }) {
+function offlineText({ context, asOf, goal }) {
   const lines = [
     'Ответ локальной модели сейчас недоступен; показываю сохранённые доказательства и контрольные вопросы без догадок.',
     'Установлено:',
@@ -16,6 +16,7 @@ function offlineText({ context, asOf }) {
     for (const document of context.caseDocuments) lines.push(`- ${document.title}: ${document.content}`);
   }
   lines.push('', 'Не подтверждено:', '- Дату процессуального действия, документ-основание и факты, которые ещё не отражены в памяти дела.', '', 'Риски:', '- Не делаю окончательный юридический вывод без проверки оригиналов и редакции нормы на нужную дату.', '', 'Ближайший шаг:', '- Уточнить, какой результат нужен и какие даты/документы являются ключевыми.');
+  if (goal) lines.push('', `Цель клиента: ${goal.goal?.customText || goal.goal?.label || 'уточняется'}.`, '- Ответ и дальнейший проект нужно сверять с этой целью после подтверждения фактов.');
   return lines.join('\n');
 }
 
@@ -38,6 +39,11 @@ export function createChatService({ db, model }) {
     async ask({ caseId, message, asOf }) {
       if (!caseId || !message?.trim()) throw new Error('caseId and message are required');
       const context = buildContext({ db, caseId, message, asOf });
+      const goalMemory = db.listMemories({ scope: 'case', caseId }).filter((item) => item.kind === 'case_goal').at(-1);
+      let goal = null;
+      if (goalMemory) {
+        try { goal = JSON.parse(goalMemory.content); } catch { goal = null; }
+      }
       db.addMessage({ caseId, role: 'user', content: message.trim() });
       const system = [
         'Ты локальный помощник по праву Республики Казахстан.',
@@ -47,10 +53,12 @@ export function createChatService({ db, model }) {
         'Не раскрывай скрытую цепочку рассуждений. Показывай только краткие проверяемые основания, ссылки на найденные документы и то, что нужно уточнить.',
         'Действуй в интересах обратившейся стороны, но сначала явно укажи, если её процессуальная роль не определена.',
         'Если данных не хватает, задай конкретные уточняющие вопросы.',
+        goal ? `Приоритет клиента: ${goal.goal?.customText || goal.goal?.label || 'уточняется'}.` : 'Цель клиента ещё не подтверждена; сначала уточни желаемый результат.',
       ].join(' ');
       const prompt = [
         `Вопрос пользователя: ${message.trim()}`,
         `Дата анализа: ${asOf}`,
+        `Цель клиента: ${goal?.goal?.customText || goal?.goal?.label || 'не подтверждена'}`,
         'Контекст из изолированной памяти:',
         context.promptContext || '(релевантные фрагменты не найдены)',
       ].join('\n');
@@ -65,7 +73,7 @@ export function createChatService({ db, model }) {
           warnings.push(`Локальная модель недоступна: ${error.message}`);
         }
       }
-      if (!text) text = offlineText({ context, asOf });
+      if (!text) text = offlineText({ context, asOf, goal });
       else if (text.length < 700 || !/Установлено|Не подтверждено|Варианты действий/i.test(text)) text = `${text}\n\n${verifiedNotes(context)}`;
       db.addMessage({ caseId, role: 'assistant', content: text });
       return { text, mode, asOf, sources: context.legalSources, caseDocuments: context.caseDocuments, warnings };

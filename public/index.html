@@ -28,6 +28,8 @@
 
           <div class="stage-strip" id="stage-strip"></div>
 
+          <section class="case-briefing hidden" id="case-briefing" aria-live="polite"></section>
+
           <div class="chat-panel">
             <div class="chat-log" id="chat-log"><div class="empty-chat"><div class="empty-chat-icon">J</div><h3>Начните работу с делом</h3><p>Загрузите документ или задайте вопрос. Контекст будет собираться только внутри выбранного дела.</p></div></div>
             <div class="composer-wrap">
@@ -39,6 +41,18 @@
                 <div class="processing-phase" id="processing-phase"></div>
                 <div class="review-summary hidden" id="review-summary"></div>
               </section>
+              <section class="goal-panel hidden" id="goal-panel" aria-live="polite">
+                <div class="goal-heading"><div><span class="eyebrow">Цель обращения</span><h3>Что нужно получить по этому делу?</h3></div><span class="goal-state" id="goal-state">нужно уточнить</span></div>
+                <p class="goal-copy">Сначала выберите результат или опишите его своими словами. После подтверждения JUSTICEkz соберёт доказательственный каркас документа.</p>
+                <div class="goal-options" id="goal-options">
+                  <button type="button" class="goal-option" data-goal="additional_requirements">Дополнительные требования</button>
+                  <button type="button" class="goal-option" data-goal="new_statement">Новое заявление</button>
+                  <button type="button" class="goal-option" data-goal="debt_challenge">Оспорить долг</button>
+                </div>
+                <textarea id="goal-custom" rows="2" placeholder="Или опишите желаемый результат своими словами..."></textarea>
+                <div class="goal-actions"><button type="button" class="primary-button" id="confirm-goal">Зафиксировать цель</button><span class="goal-hint" id="goal-hint"></span></div>
+                <div class="goal-draft hidden" id="goal-draft"></div>
+              </section>
               <div class="composer-tools"><label class="file-button"><span>Добавить документы</span><input type="file" id="document-input" multiple accept=".txt,.md,.csv,.json,.pdf,.doc,.docx,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp"></label><span class="upload-hint" id="upload-hint">Можно выбрать несколько файлов</span></div>
               <div class="composer"><textarea id="message-input" rows="2" placeholder="Опишите вопрос по текущему делу..."></textarea><button class="send-button" id="send-button">Отправить <span>↗</span></button></div>
             </div>
@@ -46,11 +60,26 @@
         </section>
 
         <aside class="context-panel panel-right">
-          <div class="context-section"><div class="section-heading"><span class="eyebrow">Документы дела</span><span class="count-badge" id="document-count">0</span></div><div id="document-list" class="document-list"><div class="muted">Документы появятся после загрузки.</div></div></div>
-          <div class="context-section"><div class="section-heading"><span class="eyebrow">Хронология</span><span class="count-badge" id="event-count">0</span></div><div id="event-list" class="event-list"><div class="muted">Даты появятся после обработки документов.</div></div></div>
-          <div class="context-section"><div class="section-heading"><span class="eyebrow">Проверить</span><span class="count-badge" id="question-count">0</span></div><div id="question-list" class="question-list"><div class="muted">Контрольные вопросы появятся по ходу работы.</div></div></div>
-          <div class="context-section"><div class="section-heading"><span class="eyebrow">Найдено в праве</span><span class="count-badge" id="source-count">0</span></div><div id="source-list" class="source-list"><div class="muted">Источники появятся после вопроса.</div></div></div>
-          <div class="context-section"><div class="section-heading"><span class="eyebrow">Следующие действия</span><span class="count-badge" id="task-count">0</span></div><div id="task-list" class="task-list"><div class="muted">Задачи формируются по мере работы.</div></div></div>
+          <details class="context-section compact-section">
+            <summary class="section-heading"><span class="eyebrow">Документы дела</span><span class="count-badge" id="document-count">0</span></summary>
+            <div id="document-list" class="document-list"><div class="muted">Документы появятся после загрузки.</div></div>
+          </details>
+          <details class="context-section compact-section">
+            <summary class="section-heading"><span class="eyebrow">Хронология</span><span class="count-badge" id="event-count">0</span></summary>
+            <div id="event-list" class="event-list"><div class="muted">Даты появятся после обработки документов.</div></div>
+          </details>
+          <details class="context-section compact-section">
+            <summary class="section-heading"><span class="eyebrow">Проверить</span><span class="count-badge" id="question-count">0</span></summary>
+            <div id="question-list" class="question-list"><div class="muted">Контрольные вопросы появятся по ходу работы.</div></div>
+          </details>
+          <details class="context-section compact-section">
+            <summary class="section-heading"><span class="eyebrow">Найдено в праве</span><span class="count-badge" id="source-count">0</span></summary>
+            <div id="source-list" class="source-list"><div class="muted">Источники появятся после вопроса.</div></div>
+          </details>
+          <details class="context-section compact-section">
+            <summary class="section-heading"><span class="eyebrow">Следующие действия</span><span class="count-badge" id="task-count">0</span></summary>
+            <div id="task-list" class="task-list"><div class="muted">Задачи формируются по мере работы.</div></div>
+          </details>
           <div class="context-section memory-note"><div class="eyebrow">Границы памяти</div><p><strong>Правовая база</strong><br>Редакции НПА и источники на выбранную дату.</p><p><strong>Память дела</strong><br>Только документы и факты текущего проекта.</p></div>
         </aside>
       </main>

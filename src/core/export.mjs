@@ -6,7 +6,7 @@ function escapeHtml(value) {
   return escapeXml(value);
 }
 
-export function buildDraftMarkdown({ caseTitle, caseNumber, stageTitle, asOf, messages = [], sources = [], caseDocuments = [] }) {
+export function buildDraftMarkdown({ caseTitle, caseNumber, stageTitle, asOf, messages = [], sources = [], caseDocuments = [], goalDraft = null }) {
   const lines = [
     `# ${caseTitle}`,
     '',
@@ -25,6 +25,9 @@ export function buildDraftMarkdown({ caseTitle, caseNumber, stageTitle, asOf, me
     '## Источники права',
     ...sources.map((source) => `- **${source.title}:** ${source.content}${source.source_url ? ` (${source.source_url})` : ''}`),
   ];
+  if (goalDraft) {
+    lines.push('', '## Цель обращения', `- ${goalDraft.title || goalDraft.purpose || 'не указана'}`, `- Результат клиента: ${goalDraft.purpose || goalDraft.title || 'не указан'}`, `- Тип проекта: ${goalDraft.documentType || 'не определён'}`, '', '## Каркас проекта документа', '', '### Факты', ...(goalDraft.facts || []).map((item) => `- ${item}`), '', '### Хронология', ...(goalDraft.timeline || []).map((item) => `- ${item.date || 'Дата не установлена'} — ${item.title} (${item.status === 'confirmed' ? 'подтверждено' : 'проверить'})`), '', '### Просительная часть', ...(goalDraft.requests || []).map((item) => `- ${item}`), '', '### Приложения', ...(goalDraft.attachments || []).map((item) => `- ${item}`), '', '### Нужно подтвердить', ...(goalDraft.unknowns || []).map((item) => `- ${item}`));
+  }
   return lines.join('\n');
 }
 
