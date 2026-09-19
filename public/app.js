@@ -1,4 +1,4 @@
-const state = { cases: [], activeCase: null, detail: null, asOf: new Date().toISOString().slice(0, 10), processing: null, goalSelection: null, goalSaving: false };
+const state = { cases: [], activeCase: null, detail: null, asOf: new Date().toISOString().slice(0, 10), processing: null, goalSelection: null, goalSaving: false, chatOpen: true };
 const $ = (selector) => document.querySelector(selector);
 const VISIBLE_DOCUMENT_LIMIT = 80;
 const VISIBLE_EVENT_LIMIT = 120;
@@ -28,6 +28,25 @@ function listMarkup(items, limit = 4) {
   return values.length ? `<ul>${values.slice(0, limit).map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>` : '<p class="muted">Не выделено.</p>';
 }
 
+function setChatDrawer(open) {
+  state.chatOpen = open;
+  const drawer = $('#chat-drawer');
+  const toggle = $('#chat-drawer-toggle');
+  const status = $('#chat-drawer-status');
+  if (!drawer || !toggle) return;
+  drawer.classList.toggle('chat-closed', !open);
+  toggle.setAttribute('aria-expanded', String(open));
+  if (status) status.textContent = open ? 'открыт' : 'свёрнут';
+}
+
+function messageMarkup(message) {
+  const content = String(message.content || '');
+  const long = content.length > 1200;
+  const preview = long ? `${content.slice(0, 1000).trim()}…` : content;
+  const full = long ? `<details class="message-full"><summary>Показать полный ответ</summary><div class="message-bubble message-full-content">${escapeHtml(content)}</div></details>` : '';
+  return `<div class="message ${escapeHtml(message.role)}"><div class="message-meta"><span class="message-role">${message.role === 'user' ? 'Вы' : 'JUSTICEkz'}</span><span>${message.created_at ? new Date(message.created_at).toLocaleString('ru-RU') : ''}</span></div><div class="message-bubble${long ? ' message-collapsed' : ''}">${escapeHtml(preview)}</div>${full}</div>`;
+}
+
 function renderBriefing(review) {
   const box = $('#case-briefing');
   const report = review?.report;
@@ -35,8 +54,9 @@ function renderBriefing(review) {
   const briefing = report.briefing;
   const dateRows = (report.dateAnchors || []).slice(0, 5).map((item) => `<div class="briefing-date"><strong>${escapeHtml(item.date || 'Дата не установлена')}</strong><span>${escapeHtml(item.title)}</span><em class="date-${escapeHtml(item.status)}">${item.status === 'confirmed' ? 'подтверждено' : item.status === 'unknown' ? 'не установлено' : 'предложение'}</em></div>`).join('');
   const violations = (report.violations || []).slice(0, 4).map((item) => `<div class="violation-item"><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.basis)}</span><em>${escapeHtml(item.status)}</em></div>`).join('');
-  box.innerHTML = `<div class="briefing-top"><div><span class="eyebrow">Краткая карта дела</span><h3>${escapeHtml(briefing.caseType)}</h3><p>${escapeHtml(briefing.short)}</p></div><span class="briefing-stage">${escapeHtml(briefing.currentPosition)}</span></div><div class="briefing-grid"><div><span class="briefing-label">Стороны</span>${listMarkup(briefing.parties, 3)}</div><div><span class="briefing-label">Обязательства</span>${listMarkup(briefing.obligations, 2)}</div><div><span class="briefing-label">Что хотят</span>${listMarkup(briefing.requests, 2)}</div><div><span class="briefing-label">Что произошло</span>${listMarkup(briefing.whatHappened, 2)}</div></div><div class="briefing-row"><div class="briefing-subsection"><span class="briefing-label">Опорные даты</span><div class="briefing-dates">${dateRows || '<p class="muted">Даты не найдены.</p>'}</div></div><div class="briefing-subsection"><span class="briefing-label">Нарушения и контрольные точки</span><div class="violation-list">${violations || '<p class="muted">Явных контрольных точек пока не выделено.</p>'}</div></div></div><details class="compact-disclosure briefing-details"><summary>Показать расширенную сводку и варианты действий</summary><p class="briefing-detail-copy">${escapeHtml(briefing.detailed || '')}</p>${listMarkup(report.options, 4)}${listMarkup(report.forecast, 3)}</details>`;
+  box.innerHTML = `<summary class="briefing-summary"><span class="briefing-summary-main"><span class="eyebrow">Краткая карта дела</span><strong>${escapeHtml(briefing.caseType)}</strong><span>${escapeHtml(briefing.short || 'Краткий пересказ формируется.')}</span></span><span class="briefing-summary-side"><span class="briefing-stage">${escapeHtml(briefing.currentPosition)}</span><span class="briefing-chevron" aria-hidden="true">+</span></span></summary><div class="briefing-body"><div class="briefing-top"><div><span class="eyebrow">Сводка</span><h3>${escapeHtml(briefing.caseType)}</h3><p>${escapeHtml(briefing.short)}</p></div><span class="briefing-stage">${escapeHtml(briefing.currentPosition)}</span></div><div class="briefing-grid"><div><span class="briefing-label">Стороны</span>${listMarkup(briefing.parties, 3)}</div><div><span class="briefing-label">Обязательства</span>${listMarkup(briefing.obligations, 2)}</div><div><span class="briefing-label">Что хотят</span>${listMarkup(briefing.requests, 2)}</div><div><span class="briefing-label">Что произошло</span>${listMarkup(briefing.whatHappened, 2)}</div></div><div class="briefing-row"><div class="briefing-subsection"><span class="briefing-label">Опорные даты</span><div class="briefing-dates">${dateRows || '<p class="muted">Даты не найдены.</p>'}</div></div><div class="briefing-subsection"><span class="briefing-label">Нарушения и контрольные точки</span><div class="violation-list">${violations || '<p class="muted">Явных контрольных точек пока не выделено.</p>'}</div></div></div><details class="compact-disclosure briefing-details"><summary>Показать расширенную сводку и варианты действий</summary><p class="briefing-detail-copy">${escapeHtml(briefing.detailed || '')}</p>${listMarkup(report.options, 4)}${listMarkup(report.forecast, 3)}</details></div>`;
   box.classList.remove('hidden');
+  box.open = false;
 }
 
 function renderGoalDraft(draft) {
@@ -80,7 +100,7 @@ function renderDetail() {
   $('#stage-strip').innerHTML = detail.stages.map((stage) => `<button class="stage-button ${stage.id === detail.case.current_stage_id ? 'active' : ''}" data-stage-id="${stage.id}">${escapeHtml(stage.title)}</button>`).join('');
   $('#stage-strip').querySelectorAll('[data-stage-id]').forEach((button) => button.addEventListener('click', async () => { await api(`/api/cases/${detail.case.id}/stages/current`, { method: 'POST', body: JSON.stringify({ stageId: button.dataset.stageId }) }); await selectCase(detail.case.id); }));
   const messages = detail.messages || [];
-  $('#chat-log').innerHTML = messages.length ? messages.map((message) => `<div class="message ${message.role}"><div class="message-meta"><span class="message-role">${message.role === 'user' ? 'Вы' : 'JUSTICEkz'}</span><span>${new Date(message.created_at).toLocaleString('ru-RU')}</span></div><div class="message-bubble">${escapeHtml(message.content)}</div></div>`).join('') : emptyChat();
+  $('#chat-log').innerHTML = messages.length ? messages.map(messageMarkup).join('') : emptyChat();
   $('#chat-log').scrollTop = $('#chat-log').scrollHeight;
   $('#task-count').textContent = detail.tasks.length;
   $('#task-list').innerHTML = detail.tasks.length ? detail.tasks.map((task) => `<div class="task-item"><span class="task-box"></span><span>${escapeHtml(task.title)}</span></div>`).join('') : '<div class="muted">Задачи формируются по мере работы.</div>';
@@ -129,8 +149,9 @@ function renderReviewSummary(review) {
   const box = $('#review-summary');
   const report = review?.report;
   if (!report) { box.classList.add('hidden'); box.innerHTML = ''; return; }
-  const section = (title, items, className = '') => `<div class="review-section ${className}"><strong>${escapeHtml(title)}</strong><ul>${(items || []).slice(0, 6).map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul></div>`;
-  box.innerHTML = `<div class="review-title"><span>Первичный разбор сохранён в память</span><span class="review-role">Роль: ${escapeHtml(report.partyRole || 'не определена')}</span></div>${section('Что установлено', report.findings)}${section('Пробелы и проверки', report.gaps, 'review-warning')}${section('Риски', report.risks, 'review-risk')}${section('Варианты действий', report.options)}${section('Ближайший прогноз', report.forecast)}${section('Следующие задачи', report.nextTasks)}`;
+  const section = (title, items, className = '', limit = 4) => `<div class="review-section ${className}"><strong>${escapeHtml(title)}</strong><ul>${(items || []).slice(0, limit).map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul></div>`;
+  const glance = [['Установлено', report.findings], ['Проверить', report.gaps], ['Риски', report.risks], ['Варианты', report.options]];
+  box.innerHTML = `<div class="review-title"><span>Разбор сохранён в память дела</span><span class="review-role">Роль: ${escapeHtml(report.partyRole || 'не определена')}</span></div><div class="review-glance">${glance.map(([title, items]) => `<div><strong>${escapeHtml(title)}</strong><span>${escapeHtml((items || [])[0] || 'не выделено')}</span></div>`).join('')}</div><details class="compact-disclosure review-details"><summary>Открыть полный первичный разбор</summary>${section('Что установлено', report.findings, '', 5)}${section('Пробелы и проверки', report.gaps, 'review-warning', 5)}${section('Риски', report.risks, 'review-risk', 5)}${section('Варианты действий', report.options, '', 5)}${section('Ближайший прогноз', report.forecast, '', 4)}${section('Следующие задачи', report.nextTasks, '', 4)}</details>`;
   box.classList.remove('hidden');
 }
 
@@ -192,9 +213,10 @@ async function sendMessage() {
   if (log.querySelector('.empty-chat')) log.innerHTML = '';
   const pending = document.createElement('div');
   pending.className = 'message assistant';
-  pending.innerHTML = '<div class="message-meta"><span class="message-role">JUSTICEkz</span></div><div class="message-bubble">Сверяю факты дела, редакцию права и возможные риски…</div>';
+  pending.innerHTML = '<div class="message-meta"><span class="message-role">JUSTICEkz</span></div><div class="message-bubble message-collapsed">Сверяю факты дела, редакцию права и возможные риски…</div>';
   log.appendChild(pending);
   log.scrollTop = log.scrollHeight;
+  setChatDrawer(true);
   setComposerAvailability(false, false);
   try {
     const result = await api(`/api/cases/${state.activeCase}/chat`, { method: 'POST', body: JSON.stringify({ message, asOf: state.asOf }) });
@@ -252,6 +274,7 @@ $('#create-case-submit').addEventListener('click', createCase);
 $('#cancel-case-dialog').addEventListener('click', () => $('#new-case-dialog').close());
 $('#close-case-dialog').addEventListener('click', () => $('#new-case-dialog').close());
 $('#send-button').addEventListener('click', sendMessage);
+$('#chat-drawer-toggle').addEventListener('click', () => setChatDrawer(!state.chatOpen));
 $('#message-input').addEventListener('keydown', (event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendMessage(); } });
 $('#document-input').addEventListener('change', uploadDocument);
 $('#as-of-date').addEventListener('change', (event) => { state.asOf = event.target.value; });

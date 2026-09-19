@@ -28,3 +28,10 @@ test('chat exposes concise evidence status instead of hidden reasoning', () => {
   assert.match(appSource, /Краткая карта дела/);
   assert.doesNotMatch(appSource, /цепочк|chain.of.thought/i);
 });
+
+test('chat is a bottom drawer and the case briefing can collapse', () => {
+  assert.match(appSource, /chat-drawer/);
+  assert.match(appSource, /chat-drawer-toggle/);
+  assert.match(appSource, /message-collapsed/);
+  assert.match(appSource, /briefing-body/);
+});

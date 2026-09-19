@@ -28,9 +28,10 @@
 
           <div class="stage-strip" id="stage-strip"></div>
 
-          <section class="case-briefing hidden" id="case-briefing" aria-live="polite"></section>
+          <details class="case-briefing hidden" id="case-briefing" aria-live="polite"></details>
 
-          <div class="chat-panel">
+          <button class="chat-drawer-toggle" id="chat-drawer-toggle" type="button" aria-expanded="true" aria-controls="chat-drawer"><span>Диалог по делу</span><span id="chat-drawer-status">открыт</span></button>
+          <div class="chat-panel chat-drawer" id="chat-drawer">
             <div class="chat-log" id="chat-log"><div class="empty-chat"><div class="empty-chat-icon">J</div><h3>Начните работу с делом</h3><p>Загрузите документ или задайте вопрос. Контекст будет собираться только внутри выбранного дела.</p></div></div>
             <div class="composer-wrap">
               <section class="processing-panel hidden" id="processing-panel" aria-live="polite">

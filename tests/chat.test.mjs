@@ -28,6 +28,21 @@ test('offline chat stays grounded and never calls an unconfigured model', async 
   db.close();
 });
 
+test('offline chat returns a compact digest instead of dumping full memory excerpts', async () => {
+  const db = createDatabase({ dataDir: tempDataDir() });
+  const caseItem = db.createCase({ title: 'Компактный ответ' });
+  db.addMemory({ scope: 'case', caseId: caseItem.id, title: 'Материалы дела', content: `Постановление ЧСИ от 10.08.2026. ${'Длинный повторяющийся фрагмент. '.repeat(220)}` });
+  db.addMemory({ scope: 'law', title: 'ГПК РК', content: `Порядок обжалования. ${'Длинная выдержка из нормативного акта. '.repeat(220)}`, effectiveFrom: '2020-01-01' });
+  const model = createModelAdapter({ modelUrl: null, fetchImpl: () => { throw new Error('must not call'); } });
+  const response = await createChatService({ db, model }).ask({ caseId: caseItem.id, message: 'обжалование постановления', asOf: '2026-01-01' });
+
+  assert.ok(response.text.length < 1800);
+  assert.match(response.text, /Кратко|Коротко/i);
+  assert.match(response.text, /ГПК РК/);
+  assert.equal(response.text.includes('Длинная выдержка из нормативного акта. Длинная выдержка из нормативного акта. Длинная выдержка из нормативного акта.'), false);
+  db.close();
+});
+
 test('configured local model receives only the selected case context', async () => {
   const db = createDatabase({ dataDir: tempDataDir() });
   const current = db.createCase({ title: 'Текущее' });
@@ -46,8 +61,9 @@ test('configured local model receives only the selected case context', async () 
 
   assert.equal(response.mode, 'local-model');
   assert.match(response.text, /Проверенный/);
-  assert.equal(payload.max_tokens, 192);
+  assert.equal(payload.max_tokens, 128);
   assert.deepEqual(payload.chat_template_kwargs, { enable_thinking: false });
+  assert.match(payload.messages[0].content, /не переписывай|без длинных выдержек/i);
   const serialized = JSON.stringify(payload);
   assert.match(serialized, /Сведения текущего дела/);
   assert.equal(serialized.includes('Секретные сведения другого дела'), false);
