@@ -7,6 +7,8 @@ import { config as defaultConfig } from '../config.mjs';
 import { createDatabase } from '../core/db.mjs';
 import { ingestDocument } from '../core/ingest.mjs';
 import { createDocumentQueue } from '../core/processing.mjs';
+import { createCaseReviewService } from '../core/case-review.mjs';
+import { collectCaseFiles } from '../core/folder-import.mjs';
 import { createRedactor } from '../core/redaction.mjs';
 import { createModelAdapter } from '../core/model.mjs';
 import { createChatService } from '../core/chat.mjs';
@@ -73,12 +75,13 @@ function safeStaticPath(urlPath) {
   return full;
 }
 
-export function createApplication({ dataDir = defaultConfig.dataDir, modelUrl = defaultConfig.modelUrl, modelName = defaultConfig.modelName } = {}) {
+export function createApplication({ dataDir = defaultConfig.dataDir, modelUrl = defaultConfig.modelUrl, modelName = defaultConfig.modelName, reviewModel = undefined, reviewService: suppliedReviewService = null } = {}) {
   const db = createDatabase({ dataDir });
   const redactor = createRedactor({ db, dataDir });
   const model = createModelAdapter({ modelUrl, modelName });
   const chat = createChatService({ db, model });
-  const documentQueue = createDocumentQueue({ db, dataDir });
+  const reviewService = suppliedReviewService ?? createCaseReviewService({ db, model: reviewModel === undefined ? model : reviewModel });
+  const documentQueue = createDocumentQueue({ db, dataDir, reviewService });
 
   const server = http.createServer(async (request, response) => {
     try {
@@ -107,6 +110,7 @@ export function createApplication({ dataDir = defaultConfig.dataDir, modelUrl = 
             return sendJson(response, 200, {
               case: caseItem, stages: db.listStages(caseId), tasks: db.listTasks(caseId), messages: db.listMessages(caseId),
               documents, events, questions: buildCaseQuestions(documents, events), queueRunning: documentQueue.running,
+              processing: { active: db.getActiveBatch(caseId), latest: db.listBatches(caseId)[0] ?? null, review: db.getLatestReview(caseId) },
             });
           }
           if (request.method === 'POST' && parts[3] === 'stages' && parts[4] === 'current') {
@@ -116,7 +120,7 @@ export function createApplication({ dataDir = defaultConfig.dataDir, modelUrl = 
           if (request.method === 'GET' && parts[3] === 'documents') {
             const documents = db.listDocuments(caseId);
             const events = db.listEvents(caseId);
-            return sendJson(response, 200, { documents, events, questions: buildCaseQuestions(documents, events), queueRunning: documentQueue.running });
+            return sendJson(response, 200, { documents, events, questions: buildCaseQuestions(documents, events), queueRunning: documentQueue.running, processing: { active: db.getActiveBatch(caseId), latest: db.listBatches(caseId)[0] ?? null, review: db.getLatestReview(caseId) } });
           }
           if (request.method === 'POST' && parts[3] === 'documents' && parts[4] === 'batch') {
             const body = await readJson(request);
@@ -131,9 +135,24 @@ export function createApplication({ dataDir = defaultConfig.dataDir, modelUrl = 
             const storedDocuments = db.listDocuments(caseId);
             const events = db.listEvents(caseId);
             return sendJson(response, 202, {
+              batchId: jobs.batchId,
+              batch: db.getBatch(jobs.batchId),
               jobs: jobs.map((job) => ({ documentId: job.documentId, error: job.error?.message ?? null })),
               documents: storedDocuments, events, questions: buildCaseQuestions(storedDocuments, events),
             });
+          }
+          if (request.method === 'POST' && parts[3] === 'documents' && parts[4] === 'folder') {
+            const body = await readJson(request);
+            if (!body.folderPath?.trim()) return sendError(response, 400, 'folderPath is required');
+            const files = collectCaseFiles(body.folderPath.trim());
+            if (!files.length) return sendError(response, 400, 'В папке не найдено поддерживаемых документов');
+            const jobs = documentQueue.enqueueBatch({ caseId, stageId: body.stageId ?? caseItem.current_stage_id, documents: files });
+            return sendJson(response, 202, { batchId: jobs.batchId, batch: db.getBatch(jobs.batchId), fileCount: files.length, documents: db.listBatchDocuments(jobs.batchId) });
+          }
+          if (request.method === 'GET' && parts[3] === 'document-batches' && parts[4]) {
+            const batch = db.getBatch(parts[4]);
+            if (!batch || batch.case_id !== caseId) return sendError(response, 404, 'Batch not found');
+            return sendJson(response, 200, { batch, documents: db.listBatchDocuments(batch.id), review: db.getLatestReview(caseId)?.batch_id === batch.id ? db.getLatestReview(caseId) : null, events: db.listEvents(caseId) });
           }
           if (request.method === 'POST' && parts[3] === 'documents') {
             const body = await readJson(request);
@@ -147,6 +166,14 @@ export function createApplication({ dataDir = defaultConfig.dataDir, modelUrl = 
           if (request.method === 'POST' && parts[3] === 'chat') {
             const body = await readJson(request);
             if (!body.message?.trim()) return sendError(response, 400, 'message is required');
+            const activeBatch = db.getActiveBatch(caseId);
+            if (activeBatch) {
+              return sendJson(response, 409, {
+                error: `Сначала дождитесь завершения обработки и первичного разбора: ${activeBatch.completed} из ${activeBatch.total} документов.`,
+                batchId: activeBatch.id,
+                batch: activeBatch,
+              });
+            }
             const result = await chat.ask({ caseId, message: body.message, asOf: dateOrToday(body.asOf ?? caseItem.action_date) });
             return sendJson(response, 200, result);
           }

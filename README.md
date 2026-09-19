@@ -25,6 +25,20 @@ The supported low-memory setup is a local `Qwen3-0.6B-Q8_0.gguf` server through 
 
 For text extraction and OCR, install the local tools separately when needed: Poppler (`pdftotext` and `pdftoppm`), Tesseract with Russian and Kazakh language packs, and LibreOffice for legacy `.doc`. On Windows, run `powershell -ExecutionPolicy Bypass -File scripts/setup-ocr.ps1` for project-local Tesseract or `powershell -ExecutionPolicy Bypass -File scripts/setup-office.ps1` for LibreOffice. The application searches `.justicekz/tools/Tesseract-OCR` and common LibreOffice install paths. The browser accepts multiple files and shows a per-document status. DOCX is parsed without an external dependency.
 
+For a large local folder, keep the source files where they are and run the folder importer after starting the server:
+
+```powershell
+node scripts/import-case-folder.mjs --folder "C:\Users\boostseller\Documents\Юрист РК\ХРОНОЛОГИЯ\ЭКСПЕРТ ПЛЮС" --title "ЭКСПЕРТ ПЛЮС"
+```
+
+The importer creates a separate case, keeps relative file names as document metadata, waits for extraction/OCR and the first-pass case review, and prints the actual counts. The chat remains blocked until that review has been saved to case memory.
+
+After improving the date heuristics, rebuild only the derived chronology and primary review of an existing case without re-uploading its source files:
+
+```powershell
+node scripts/rebuild-case-analysis.mjs case-xxxxxxxx
+```
+
 To download the official legal baseline, run `powershell -ExecutionPolicy Bypass -File scripts/fetch-official-laws.ps1`. The public manifest at `data/seed/official-sources.json` covers the Civil Code, Civil Procedure Code, Administrative Procedural Code, enforcement law, Entrepreneurial Code, and selected current consolidated normative resolutions of the Supreme Court on civil judgments, court costs, preparation of civil cases, interim measures, enforcement, executive inscriptions, access to justice, administrative judgments, administrative procedure, review by new or newly discovered circumstances, LLPs, and JSCs. The script stores raw pages, records, and SHA-256 metadata under `.justicekz/data/legal/official`; it does not put downloaded law text into Git. Import only reviewed records with explicit act dates using `node scripts/ingest-law.mjs path/to/law.json`. The downloaded pages are current consolidated snapshots; historical analysis requires importing a separately dated snapshot for the relevant редакция.
 
 ## Project boundaries

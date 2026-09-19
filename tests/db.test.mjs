@@ -87,3 +87,25 @@ test('documents expose processing state and chronology stays case-scoped', () =>
   assert.equal(event.status, 'suggested');
   db.close();
 });
+
+test('batch and review state survive database reopen', () => {
+  const dataDir = tempDataDir();
+  const firstDb = createDatabase({ dataDir });
+  const caseItem = firstDb.createCase({ title: 'Разбор дела' });
+  const stage = firstDb.listStages(caseItem.id)[0];
+  const batch = firstDb.addBatch({ caseId: caseItem.id, stageId: stage.id, total: 1 });
+  const document = firstDb.addDocument({
+    caseId: caseItem.id, stageId: stage.id, batchId: batch.id, originalName: 'notice.txt',
+    storedPath: 'cases/notice.txt', mimeType: 'text/plain', status: 'queued', checksum: 'state',
+  });
+  const review = firstDb.addReview({ caseId: caseItem.id, batchId: batch.id });
+  firstDb.updateBatch(batch.id, { status: 'reviewing', phase: 'review', progress: 85, currentFileName: 'notice.txt' });
+  firstDb.updateReview(review.id, { status: 'complete', progress: 100, report: { findings: ['ok'] } });
+  firstDb.close();
+
+  const secondDb = createDatabase({ dataDir });
+  assert.equal(secondDb.getBatch(batch.id).status, 'reviewing');
+  assert.equal(secondDb.listBatchDocuments(batch.id)[0].id, document.id);
+  assert.deepEqual(secondDb.getReview(review.id).report, { findings: ['ok'] });
+  secondDb.close();
+});

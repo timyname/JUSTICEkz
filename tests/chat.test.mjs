@@ -46,7 +46,7 @@ test('configured local model receives only the selected case context', async () 
 
   assert.equal(response.mode, 'local-model');
   assert.match(response.text, /Проверенный/);
-  assert.equal(payload.max_tokens, 96);
+  assert.equal(payload.max_tokens, 192);
   assert.deepEqual(payload.chat_template_kwargs, { enable_thinking: false });
   const serialized = JSON.stringify(payload);
   assert.match(serialized, /Сведения текущего дела/);

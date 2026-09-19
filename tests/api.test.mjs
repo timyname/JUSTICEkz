@@ -10,12 +10,12 @@ function tempDataDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'justicekz-api-'));
 }
 
-async function withServer(callback) {
-  const app = createApplication({ dataDir: tempDataDir() });
+async function withServer(callback, options = {}) {
+  const app = createApplication({ dataDir: tempDataDir(), reviewModel: null, ...options });
   await new Promise((resolve) => app.server.listen(0, '127.0.0.1', resolve));
   const address = app.server.address();
   try {
-    await callback(`http://127.0.0.1:${address.port}`);
+    await callback(`http://127.0.0.1:${address.port}`, app);
   } finally {
     app.db.close();
     await new Promise((resolve) => app.server.close(resolve));
@@ -85,16 +85,58 @@ test('API accepts a batch, lists document states, and exposes chronology', async
     const batch = await jsonRequest(base, `/api/cases/${caseId}/documents/batch`, { method: 'POST', body: JSON.stringify({ stageId, documents }) });
     assert.equal(batch.status, 202);
     assert.equal(batch.body.documents.length, 2);
+    assert.match(batch.body.batchId, /^batch-/);
+
+    const initialBatch = await jsonRequest(base, `/api/cases/${caseId}/document-batches/${batch.body.batchId}`);
+    assert.equal(initialBatch.status, 200);
+    assert.equal(initialBatch.body.batch.total, 2);
+    assert.equal(initialBatch.body.documents.length, 2);
 
     let detail;
     for (let attempt = 0; attempt < 20; attempt += 1) {
-      detail = await jsonRequest(base, `/api/cases/${caseId}`);
-      if (detail.body.documents.length === 2 && detail.body.documents.every((document) => document.status === 'text_extracted')) break;
+      detail = await jsonRequest(base, `/api/cases/${caseId}/document-batches/${batch.body.batchId}`);
+      if (['complete', 'complete_with_errors'].includes(detail.body.batch.status)) break;
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
     assert.equal(detail.status, 200);
-    assert.equal(detail.body.documents.length, 2);
-    assert.equal(detail.body.events.length, 2);
-    assert.equal(detail.body.documents.every((document) => document.status === 'text_extracted'), true);
+    assert.equal(detail.body.batch.status, 'complete');
+    assert.equal(detail.body.batch.completed, 2);
+    assert.equal(detail.body.review.status, 'complete');
+    assert.ok(detail.body.review.report.nextTasks.length);
   });
+});
+
+test('API blocks chat while the case workup is still running and opens it after review', async () => {
+  let releaseReview;
+  const reviewHold = new Promise((resolve) => { releaseReview = resolve; });
+  let app;
+  const reviewService = {
+    run: async ({ batchId }) => {
+      await reviewHold;
+      app.db.updateBatch(batchId, { status: 'complete', phase: 'complete', progress: 100, message: 'Готово' });
+      return null;
+    },
+  };
+  await withServer(async (base, serverApp) => {
+    app = serverApp;
+    const created = await jsonRequest(base, '/api/cases', { method: 'POST', body: JSON.stringify({ title: 'Блокировка чата' }) });
+    const caseId = created.body.case.id;
+    const batch = await jsonRequest(base, `/api/cases/${caseId}/documents/batch`, {
+      method: 'POST',
+      body: JSON.stringify({ documents: [{ fileName: 'one.txt', contentBase64: Buffer.from('Дата 01.09.2026').toString('base64') }] }),
+    });
+    const blocked = await jsonRequest(base, `/api/cases/${caseId}/chat`, { method: 'POST', body: JSON.stringify({ message: 'что в деле?' }) });
+    assert.equal(blocked.status, 409);
+    assert.match(blocked.body.error, /дождитесь|разбор|обработ/i);
+    assert.equal(blocked.body.batchId, batch.body.batchId);
+
+    releaseReview();
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const status = await jsonRequest(base, `/api/cases/${caseId}/document-batches/${batch.body.batchId}`);
+      if (['complete', 'complete_with_errors'].includes(status.body.batch.status)) break;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    const ready = await jsonRequest(base, `/api/cases/${caseId}/chat`, { method: 'POST', body: JSON.stringify({ message: 'что в деле?' }) });
+    assert.equal(ready.status, 200);
+  }, { reviewService });
 });

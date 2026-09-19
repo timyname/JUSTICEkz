@@ -65,6 +65,24 @@ test('chronology extraction suggests dated events with source pages', () => {
   assert.ok(events.every((event) => event.status === 'suggested'));
 });
 
+test('chronology ignores personal document dates and generic legal references', () => {
+  const text = [
+    'Дата рождения: 30.12.1993',
+    'БЕШИНКЕНОВ ТИМ КУРМАНГАЛИЕВИЧ (30.12.1993 г.)',
+    'кредитной истории Бешинкенов Тим Курмангалиевич Резидент 30.12.1993 Казахстан Мужской',
+    'Удостоверение личности выдано 03.04.2020',
+    'Пасткелтражпенинанқ 033095704 07.03.2012 16.03.2015',
+    'Закон Республики Казахстан от 01.01.2015',
+    'ст.35 Закона РК от 02.04.2010г.',
+    '08.10.2013,',
+    'идентификационный номер 931230350073 28.10.2014',
+    'Постановление ЧСИ вынесено 14.08.2026',
+  ].join('\n');
+  const events = extractSuggestedEvents(text, { fileName: 'case.txt' });
+
+  assert.deepEqual(events.map((event) => event.eventDate), ['2026-08-14']);
+});
+
 test('tool resolution honors an explicit local converter path', () => {
   const previous = process.env.SOFFICE_PATH;
   process.env.SOFFICE_PATH = process.execPath;
@@ -98,6 +116,34 @@ test('document queue processes a batch sequentially and keeps each case isolated
   assert.equal(db.listDocuments(first.id).every((document) => document.status === 'text_extracted'), true);
   assert.equal(db.listEvents(first.id).length, 2);
   assert.equal(db.listDocuments(second.id).length, 0);
+  db.close();
+});
+
+test('document queue exposes durable batch phases and counters', async () => {
+  const dataDir = tempDataDir();
+  const db = createDatabase({ dataDir });
+  const caseItem = db.createCase({ title: 'Статус обработки' });
+  const phases = [];
+  const queue = createDocumentQueue({
+    db, dataDir,
+    reviewService: { run: async ({ batchId }) => { db.updateBatch(batchId, { status: 'complete', phase: 'complete', progress: 100 }); } },
+    onProgress: (update) => phases.push(update.phase),
+  });
+  const jobs = queue.enqueueBatch({
+    caseId: caseItem.id,
+    stageId: db.listStages(caseItem.id)[0].id,
+    documents: [
+      { fileName: 'one.txt', buffer: Buffer.from('Дата 01.09.2026') },
+      { fileName: 'two.txt', buffer: Buffer.from('Дата 02.09.2026') },
+    ],
+  });
+  await queue.idle();
+  const batch = db.getBatch(jobs.batchId);
+  assert.equal(batch.completed, 2);
+  assert.equal(batch.status, 'complete');
+  assert.ok(phases.includes('text_extraction'));
+  assert.ok(phases.includes('memory'));
+  assert.ok(phases.includes('chronology'));
   db.close();
 });
 

@@ -102,8 +102,12 @@ export function extractSuggestedEvents(text, { fileName = 'документ' } =
   const events = [];
   const pages = String(text ?? '').split(/\f/g);
   const datePattern = /\b(\d{1,2})[./-](\d{1,2})[./-](\d{4})\b|\b(\d{4})-(\d{2})-(\d{2})\b/g;
+  const nonCaseDateLine = /(?:дата\s+рождения|г\.?\s*р\.?|удостоверени[ея]\s+личности|паспорт|свидетельств[оа]\s+(?:о\s+рождении|личности)|лицензи(?:я|и)|дата\s+выдачи|выдан(?:о|а|ы)?|срок\s+действия|действует\s+до|регистраци(?:я|и)|кредитн\p{L}*\s+истор|кодекс|закон\p{L}*\s+(?:республики\s+казахстан|рк)|нормативн\p{L}*\s+акт|\(\s*\d{1,2}[./-]\d{1,2}[./-]\d{4}\s*г\.?\s*\)|\b\d{9}\b.*\d{1,2}[./-]\d{1,2}[./-]\d{4}.*\d{1,2}[./-]\d{1,2}[./-]\d{4})/iu;
+  const bareDateLine = /^\s*\d{1,2}[./-]\d{1,2}[./-]\d{4}\s*[,.;:]?\s*$/u;
+  const identifierDateLine = /(?:идентификационн(?:ый|ого|ым)\s+номер|\b(?:иин|бин)\b)/iu;
   pages.forEach((page, pageIndex) => {
     page.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).forEach((line) => {
+      if (nonCaseDateLine.test(line) || bareDateLine.test(line) || identifierDateLine.test(line)) return;
       datePattern.lastIndex = 0;
       const match = datePattern.exec(line);
       if (!match) return;
@@ -187,7 +191,7 @@ async function extractText({ storedPath, extension, buffer }) {
   return { status: 'unsupported', text: '', error: 'Формат не поддерживается на этом этапе' };
 }
 
-export function prepareDocument({ db, dataDir, caseId, stageId = null, fileName, mimeType = null, buffer }) {
+export function prepareDocument({ db, dataDir, caseId, stageId = null, batchId = null, fileName, mimeType = null, buffer }) {
   if (!caseId || !fileName || !Buffer.isBuffer(buffer)) throw new Error('caseId, fileName, and buffer are required');
   const safeName = path.basename(fileName).replace(/[^\p{L}\p{N}._-]+/gu, '_');
   const caseDir = path.join(dataDir, 'cases', caseId, 'documents');
@@ -196,17 +200,19 @@ export function prepareDocument({ db, dataDir, caseId, stageId = null, fileName,
   fs.writeFileSync(storedPath, buffer);
   const extension = path.extname(safeName).toLocaleLowerCase('ru-RU');
   const document = db.addDocument({
-    caseId, stageId, originalName: fileName, storedPath, mimeType,
+    caseId, stageId, batchId, originalName: fileName, storedPath, mimeType,
     status: 'queued', checksum: checksum(buffer), progress: 0,
   });
   return { db, caseId, stageId, fileName, buffer, storedPath, extension, document };
 }
 
-export async function processPreparedDocument(prepared) {
+export async function processPreparedDocument(prepared, { onProgress = () => {} } = {}) {
   const { db, caseId, stageId, fileName, buffer, storedPath, extension, document } = prepared;
   db.updateDocument(document.id, { status: 'processing', progress: 10, startedAt: new Date().toISOString(), extractionError: null });
+  onProgress({ phase: ['.pdf', ...imageExtensions].includes(extension) ? 'ocr' : 'text_extraction', progress: 10, message: `Извлечение текста: ${fileName}` });
   try {
     const extracted = await extractText({ storedPath, extension, buffer });
+    onProgress({ phase: 'memory', progress: 55, message: `Сохраняю фрагменты в память дела: ${fileName}` });
     const chunks = extracted.text.trim() ? chunkText(extracted.text) : [];
     for (const [index, chunk] of chunks.entries()) {
       db.addMemory({
@@ -214,6 +220,7 @@ export async function processPreparedDocument(prepared) {
         title: `${fileName} · фрагмент ${index + 1}`, content: chunk.content, pageNumber: chunk.pageNumber,
       });
     }
+    onProgress({ phase: 'chronology', progress: 82, message: `Проверяю даты и события: ${fileName}` });
     const suggestedEvents = extractSuggestedEvents(extracted.text, { fileName });
     for (const event of suggestedEvents) db.addEvent({ caseId, stageId, documentId: document.id, ...event });
     const pageCount = chunks.length ? Math.max(...chunks.map((chunk) => chunk.pageNumber)) : (extracted.text.trim() ? 1 : 0);
@@ -221,6 +228,7 @@ export async function processPreparedDocument(prepared) {
       status: extracted.status, progress: 100, pageCount,
       extractionError: extracted.error ?? null, processedAt: new Date().toISOString(),
     });
+    onProgress({ phase: 'chronology', progress: 100, message: `Документ разобран: ${fileName}` });
     return { ...processed, storedPath, chunks: chunks.length, events: suggestedEvents.length, text: extracted.text };
   } catch (error) {
     const failed = db.updateDocument(document.id, { status: 'extraction_failed', progress: 100, extractionError: error.message, processedAt: new Date().toISOString() });

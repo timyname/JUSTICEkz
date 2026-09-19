@@ -1,6 +1,7 @@
 .justicekz/
 .env
 .superpowers/
+.worktrees/
 node_modules/
 *.log
 exports/
